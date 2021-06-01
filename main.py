@@ -10,8 +10,10 @@ years = np.loadtxt("./data/ЕС_Катанга/years.txt", dtype=int)
 
 z = Zone(square, year_with_square, temperature, precipitation, years, alpha=np.array([-2.7, 10]),
          beta=np.array([-1.9, 10]), ksi=np.array([-0.05, 0.05]))
+
+# z.params_gaps()
 z.theta_calc()
-z.modeling(10000)
+z.modeling(200)
 print(z.restored_square)
 z.draw()
 
