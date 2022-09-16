@@ -134,6 +134,7 @@ class Zone:
             def p(x): return np.exp(-x * self.theta[n]) * self.theta[n] / (np.exp(-self.ksi[0] * self.theta[n]) -
                                                                            np.exp(-self.ksi[1] * self.theta[n]))
             z = -1000
+            c = 0
             for i in np.arange(-1, 1, 0.001):
                 c = p(i)
                 if z < c:
