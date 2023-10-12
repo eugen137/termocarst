@@ -28,7 +28,6 @@ async def consume():
             if recovery.import_from_message(msg.value):
                 logging.info("Импортированны данные из сообщения")
                 sq = recovery.get_recovered_square()
-                print(sq)
             else:
                 logging.info("Данные из сообщения не удалось импортировать")
         await send_answer(mess=msg.value, key=msg.key, topic=msg.topic, headers=msg.headers)
