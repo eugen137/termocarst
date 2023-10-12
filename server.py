@@ -11,7 +11,8 @@ async def send_answer(mess, key, topic, headers):
         bootstrap_servers=config['KAFKA']['bootstrap_server'])
     await producer.start()
     try:
-        await producer.send_and_wait(topic_answer, value=mess, key=key, headers=list(headers))
+        val = str.encode(str(mess))
+        await producer.send_and_wait(topic=topic_answer, value=val, key=key)
     finally:
         await producer.stop()
 
@@ -27,10 +28,12 @@ async def consume():
             recovery = Recovery("polynomial")
             if recovery.import_from_message(msg.value):
                 logging.info("Импортированны данные из сообщения")
-                sq = recovery.get_recovered_square()
+                recovered_square = recovery.get_recovered_square()
+                print(recovered_square)
             else:
                 logging.info("Данные из сообщения не удалось импортировать")
-        await send_answer(mess=msg.value, key=msg.key, topic=msg.topic, headers=msg.headers)
+                recovered_square = None
+            await send_answer(mess=recovered_square, key=msg.key, topic=msg.topic, headers=msg.headers)
 
     try:
         pass
