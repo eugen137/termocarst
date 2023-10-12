@@ -13,6 +13,9 @@ async def send_answer(mess, key, topic, headers):
     try:
         val = str.encode(str(mess))
         await producer.send_and_wait(topic=topic_answer, value=val, key=key)
+        logging.info("Ответ отправлен")
+    except:
+        logging.info("Неудача с отправлением сообщения")
     finally:
         await producer.stop()
 
@@ -29,10 +32,10 @@ async def consume():
             if recovery.import_from_message(msg.value):
                 logging.info("Импортированны данные из сообщения")
                 recovered_square = recovery.get_recovered_square()
-                print(recovered_square)
             else:
                 logging.info("Данные из сообщения не удалось импортировать")
                 recovered_square = None
+            logging.info("Начало отправки ответа")
             await send_answer(mess=recovered_square, key=msg.key, topic=msg.topic, headers=msg.headers)
 
     try:
