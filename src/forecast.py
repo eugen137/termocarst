@@ -18,3 +18,4 @@ class Forecasting(Processing):
                 return True
         return False
 
+
