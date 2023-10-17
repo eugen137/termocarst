@@ -1,7 +1,10 @@
+import logging
 from enum import Enum
 from matplotlib import pyplot as plt
 import numpy as np
 from scipy import optimize
+
+from src.utils import normalize
 
 
 class TypesOfParameters(Enum):
@@ -10,10 +13,11 @@ class TypesOfParameters(Enum):
     ERRORS = 3
 
 
-class Zone:
+class RandomizeRestoring:
     def __init__(self, square: np.ndarray, years_square: np.ndarray, temperature: np.ndarray,
                  precipitation: np.ndarray, years: np.ndarray, alpha=np.array([-1, 1]),
                  beta=np.array([-1, 1]), ksi=np.array([-0.5, 0.5])):
+        logging.info("Начато восстановление RandomizeRestoring")
         self.alpha = alpha.astype(np.float64)
         self.beta = beta.astype(np.float64)
         self.ksi = ksi.astype(np.float64)
@@ -23,20 +27,19 @@ class Zone:
         self.temperature = temperature.astype(np.float64)
         self.precipitation = precipitation.astype(np.float64)
         self.years = years
-        y = years_square - np.min(years)
-        y = y.astype(int)
-        self.num_years_with_square = y
+        print(len(years_square))
+        self.num_years_with_square = (years_square - np.min(years)).astype(int)
 
+        logging.info("Нормировка данных")
         # нормировка
-        self.norm_precipitation = (precipitation - np.min(precipitation)) / \
-                                  (np.max(precipitation) - np.min(precipitation))
-        self.norm_temp = (temperature - np.min(temperature)) / \
-                         (np.max(temperature) - np.min(temperature))
-        self.norm_square = (square - np.min(square)) / \
-                           (np.max(square) - np.min(square))
-
-        self.temp_norm_yws = self.norm_temp[y]
-        self.precip_norm_yws = self.norm_precipitation[y]
+        self.norm_precipitation = normalize(precipitation)
+        self.norm_temp = normalize(temperature)
+        self.norm_square = normalize(square)
+        print(len(self.num_years_with_square))
+        print(len(self.norm_temp[self.num_years_with_square]))
+        self.temp_norm_yws = self.norm_temp[self.num_years_with_square]
+        # print(self.temp_norm_yws)
+        self.precip_norm_yws = self.norm_precipitation[self.num_years_with_square]
         self.theta = None
         r = 100
         self.bounds = optimize.Bounds(-r * np.ones_like(self.norm_square),
@@ -44,6 +47,7 @@ class Zone:
         self.restored_square = None
 
     def params_gaps(self):
+        logging.info("Начато вычисление промежутков параметров")
         # создание матрицы для вычисления промежутков
         x = np.ones_like(self.temp_norm_yws).reshape(-1, 1)
         x = np.hstack((x, self.temp_norm_yws.reshape(-1, 1), self.precip_norm_yws.reshape(-1, 1)))
@@ -54,6 +58,7 @@ class Zone:
         q = np.mat(np.transpose(x)) * np.mat(np.mat(x))
         self.alpha = [a[0] - 3 * np.sqrt(s2 * q[0, 0]), a[0] + 3 * np.sqrt(s2 * q[0, 0])]
         self.beta = [a[1] - 3 * np.sqrt(s2 * q[1, 1]), a[1] + 3 * np.sqrt(s2 * q[1, 1])]
+        logging.info("Окончено вычисление промежутков параметров")
 
     def g_m(self, theta_m):
         return (np.exp(-self.ksi[0] * theta_m) * theta_m) * (self.ksi[0] * theta_m + 1) - \
@@ -82,6 +87,10 @@ class Zone:
     def func(self, theta):
         n_points = self.square.shape
         f = np.zeros_like(self.square)
+        # print(len(theta))
+        # print(len(self.temp_norm_yws))
+        # print(len(self.precip_norm_yws))
+        # print(len(self.norm_square))
         # f = 0
         for i in range(0, n_points[0]):
             f[i] = np.abs(self.l(theta) * self.temp_norm_yws[i] + self.k(theta) * self.precip_norm_yws[i] +
@@ -89,19 +98,22 @@ class Zone:
         return f
 
     def theta_calc(self):
+        logging.info("Вычисление множителей Лагранжа")
         sol = optimize.root(self.func, np.ones_like(self.square), method="lm")
-        print("success=", sol.success)
         if sol.success:
             self.theta = sol.x
+            logging.info("Успешно окончено вычисление множителей Лагранжа")
             return sol.x
         else:
+            logging.info("Вычисление множителей Лагранжа окончено неудачей")
             return None
 
     def modeling(self, n=100):
+        logging.info("Начато моделирование")
         s_mean = np.zeros_like(self.norm_temp)
         s_m = np.ones((len(self.norm_temp), n))
         for j in range(0, n):
-            print(j)
+            logging.info("Сэмплирование, шаг {}".format(j))
             for i in range(0, len(self.norm_temp)):
                 s_m[i, j] = self.value_from_prv(TypesOfParameters.TEMPERATURE) * self.norm_temp[i] + \
                             self.value_from_prv(TypesOfParameters.PRECIPITATIONS) * self.norm_temp[i] + \
@@ -115,6 +127,11 @@ class Zone:
                     s_mean[i] += s_m[i, j]
             s_mean[i] = s_mean[i] / n
         self.restored_square = np.min(self.square) + s_mean * (np.max(self.square) - np.min(self.square))
+        square_dict = dict()
+        for i in range(0, len(self.years)):
+            square_dict[self.years[i]] = self.restored_square[i]
+        logging.info("Окончено моделирование")
+        return square_dict
 
     def value_from_prv(self, type_of_parameter: TypesOfParameters, num=0):
         n = None
@@ -155,8 +172,6 @@ class Zone:
                 if z < c:
                     z = c
             w = c
-        x1 = None
-        f = False
         while True:
             x1 = np.random.rand()
             x2 = np.random.rand()
@@ -166,12 +181,10 @@ class Zone:
         return x1
 
     def draw(self):
-
         q = []
         for i in range(0, len(self.temperature)):
             if i not in self.num_years_with_square:
                 q.append(i)
-
         pSf = np.polyfit(self.years_square, self.square, 1)
         fSf = np.polyval(pSf, self.years)
 
@@ -191,5 +204,4 @@ class Zone:
                     q + self.years[0], self.restored_square[q], '*r')
         axs[2].set_title("Площадь")
         axs[2].set_xlabel('xlabel', size=10)
-
         plt.show()

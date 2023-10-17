@@ -105,5 +105,5 @@
     "2019": 11.27910273,
     "2020": 8.690648298
   },
-  "type": "polynomial"
+  "type": "randomize_modeling"
 }
