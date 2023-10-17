@@ -3,7 +3,6 @@ from enum import Enum
 from matplotlib import pyplot as plt
 import numpy as np
 from scipy import optimize
-
 from src.utils import normalize
 
 
@@ -72,7 +71,7 @@ class RandomizeRestoring:
                 np.exp((-self.beta[1] * hr)) * (self.beta[1] * hr + 1)) / hr * (np.exp(-self.beta[0] * hr) -
                                                                                 np.exp(-self.beta[1] * hr))
 
-    def l(self, theta):
+    def el(self, theta):
         lr = (self.l_r(theta))
         return (np.exp(-self.alpha[0] * lr) * (self.alpha[0] * lr + 1) -
                 np.exp(-self.alpha[1] * lr) * (self.alpha[1] * lr + 1)) / lr * (np.exp(-self.alpha[0] * lr) -
@@ -93,7 +92,7 @@ class RandomizeRestoring:
         # print(len(self.norm_square))
         # f = 0
         for i in range(0, n_points[0]):
-            f[i] = np.abs(self.l(theta) * self.temp_norm_yws[i] + self.k(theta) * self.precip_norm_yws[i] +
+            f[i] = np.abs(self.el(theta) * self.temp_norm_yws[i] + self.k(theta) * self.precip_norm_yws[i] +
                           self.g_m(theta[i]) - self.norm_square[i])
         return f
 
@@ -185,11 +184,11 @@ class RandomizeRestoring:
         for i in range(0, len(self.temperature)):
             if i not in self.num_years_with_square:
                 q.append(i)
-        pSf = np.polyfit(self.years_square, self.square, 1)
-        fSf = np.polyval(pSf, self.years)
+        p_sf = np.polyfit(self.years_square, self.square, 1)
+        f_sf = np.polyval(p_sf, self.years)
 
-        pSredf = np.polyfit(self.years, self.restored_square, 1)
-        fSredf = np.polyval(pSredf, self.years)
+        p_middle_f = np.polyfit(self.years, self.restored_square, 1)
+        f_middle_f = np.polyval(p_middle_f, self.years)
 
         fig, axs = plt.subplots(3)
         plt.subplots_adjust(hspace=0.6)
@@ -200,7 +199,7 @@ class RandomizeRestoring:
         axs[1].plot(self.years, self.precipitation)
         axs[1].set_title("Осадки")
 
-        axs[2].plot(self.years, self.restored_square, 'g', self.years, fSf, 'r', self.years, fSredf, 'g',
+        axs[2].plot(self.years, self.restored_square, 'g', self.years, f_sf, 'r', self.years, f_middle_f, 'g',
                     q + self.years[0], self.restored_square[q], '*r')
         axs[2].set_title("Площадь")
         axs[2].set_xlabel('xlabel', size=10)

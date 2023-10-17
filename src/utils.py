@@ -18,7 +18,7 @@ class Processing(ABC):
             self.input_square(message["square"])
             self.input_precipitation(message["precipitation"])
             self.input_temperature(message["temperature"])
-            logging.info("Импортированны данные square, precipitation, temperature")
+            logging.info("Импортированы данные square, precipitation, temperature")
             self.type = message["type"]
             logging.info("Тип восстановления сменен на {}".format(message["type"]))
             return True
@@ -45,4 +45,3 @@ class Processing(ABC):
 def normalize(arr):
     return (arr - np.min(arr)) / \
         (np.max(arr) - np.min(arr))
-

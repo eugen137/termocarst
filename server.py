@@ -33,7 +33,7 @@ async def consume():
         if msg.topic == 'RecoveryRequest':
             recovery = Recovering("polynomial")
             if recovery.import_from_message(msg.value):
-                logging.info("Импортированны данные из сообщения")
+                logging.info("Импортированы данные из сообщения")
                 recovered_square = recovery.get_recovered_square()
             else:
                 logging.info("Данные из сообщения не удалось импортировать")
