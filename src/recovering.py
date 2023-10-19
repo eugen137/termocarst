@@ -29,7 +29,6 @@ class Recovering(Processing):
         return square
 
     def __randomize_modeling(self):
-        print(self._square)
         square = np.array(list(self._square.values()))
         temperature = np.array(list(self._temperature.values()))
         precipitation = np.array(list(self._precipitation.values()))

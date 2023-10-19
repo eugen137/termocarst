@@ -26,7 +26,6 @@ class RandomizeRestoring:
         self.temperature = temperature.astype(np.float64)
         self.precipitation = precipitation.astype(np.float64)
         self.years = years
-        print(len(years_square))
         self.num_years_with_square = (years_square - np.min(years)).astype(int)
 
         logging.info("Нормировка данных")
@@ -34,10 +33,7 @@ class RandomizeRestoring:
         self.norm_precipitation = normalize(precipitation)
         self.norm_temp = normalize(temperature)
         self.norm_square = normalize(square)
-        print(len(self.num_years_with_square))
-        print(len(self.norm_temp[self.num_years_with_square]))
         self.temp_norm_yws = self.norm_temp[self.num_years_with_square]
-        # print(self.temp_norm_yws)
         self.precip_norm_yws = self.norm_precipitation[self.num_years_with_square]
         self.theta = None
         r = 100
@@ -86,11 +82,6 @@ class RandomizeRestoring:
     def func(self, theta):
         n_points = self.square.shape
         f = np.zeros_like(self.square)
-        # print(len(theta))
-        # print(len(self.temp_norm_yws))
-        # print(len(self.precip_norm_yws))
-        # print(len(self.norm_square))
-        # f = 0
         for i in range(0, n_points[0]):
             f[i] = np.abs(self.el(theta) * self.temp_norm_yws[i] + self.k(theta) * self.precip_norm_yws[i] +
                           self.g_m(theta[i]) - self.norm_square[i])
@@ -112,7 +103,7 @@ class RandomizeRestoring:
         s_mean = np.zeros_like(self.norm_temp)
         s_m = np.ones((len(self.norm_temp), n))
         for j in range(0, n):
-            logging.info("Сэмплирование, шаг {}".format(j))
+            # logging.info("Сэмплирование, шаг {}".format(j))
             for i in range(0, len(self.norm_temp)):
                 s_m[i, j] = self.value_from_prv(TypesOfParameters.TEMPERATURE) * self.norm_temp[i] + \
                             self.value_from_prv(TypesOfParameters.PRECIPITATIONS) * self.norm_temp[i] + \

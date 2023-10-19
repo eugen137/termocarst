@@ -14,6 +14,5 @@ z = Zone(square, year_with_square, temperature, precipitation, years, alpha=np.a
 # z.params_gaps()
 z.theta_calc()
 z.modeling(200)
-print(z.restored_square)
 z.draw()
 

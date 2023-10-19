@@ -18,4 +18,7 @@ class Forecasting(Processing):
                 return True
         return False
 
+    def forecast(self):
+        pass
+
 
