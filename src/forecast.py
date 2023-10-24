@@ -5,8 +5,8 @@ from src.utils import Processing
 
 class Forecasting(Processing):
     def __init__(self, forecast_type="randomize_modeling", precipitation=None, temperature=None, square=None,
-                 period_type=None):
-        super().__init__(precipitation=precipitation, temperature=temperature, square=square)
+                 period_type=None, task_id=None):
+        super().__init__(task_id=task_id, precipitation=precipitation, temperature=temperature, square=square)
         self.type = forecast_type
         self.period_type = period_type
 
@@ -20,5 +20,3 @@ class Forecasting(Processing):
 
     def forecast(self):
         pass
-
-

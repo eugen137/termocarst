@@ -13,10 +13,22 @@ class TypesOfParameters(Enum):
 
 
 class RandomizeRestoring:
-    def __init__(self, square: np.ndarray, years_square: np.ndarray, temperature: np.ndarray,
+    def __init__(self, task_id, square: np.ndarray, years_square: np.ndarray, temperature: np.ndarray,
                  precipitation: np.ndarray, years: np.ndarray, alpha=np.array([-1, 1]),
                  beta=np.array([-1, 1]), ksi=np.array([-0.5, 0.5])):
-        logging.info("Начато восстановление RandomizeRestoring")
+        """
+        Класс рандомизированного восстановления пропусков в данных о площади озер.
+        :param square: Вектор с данными о площади
+        :param years_square: Вектор с данными годов, в которых есть значения площади
+        :param temperature: Вектор с данными о температуре
+        :param precipitation: Вектор с данными об осадках
+        :param years: Вектор с данными годов
+        :param alpha: Промежуток параметра Температуры
+        :param beta: Промежуток параметра Осадков
+        :param ksi: Промежуток параметра Ошибки
+        """
+        self.id = task_id
+        logging.info("ID={}. Начато восстановление RandomizeRestoring".format(self.id), extra={"task_id": self.id})
         self.alpha = alpha.astype(np.float64)
         self.beta = beta.astype(np.float64)
         self.ksi = ksi.astype(np.float64)
@@ -28,7 +40,7 @@ class RandomizeRestoring:
         self.years = years
         self.num_years_with_square = (years_square - np.min(years)).astype(int)
 
-        logging.info("Нормировка данных")
+        logging.info("ID={}. Нормировка данных".format(self.id), extra={"task_id": self.id})
         # нормировка
         self.norm_precipitation = normalize(precipitation)
         self.norm_temp = normalize(temperature)
@@ -40,20 +52,26 @@ class RandomizeRestoring:
         self.bounds = optimize.Bounds(-r * np.ones_like(self.norm_square),
                                       r * np.ones_like(self.norm_square))
         self.restored_square = None
+        self.params_gaps()
 
     def params_gaps(self):
-        logging.info("Начато вычисление промежутков параметров")
+        logging.info("ID={}. Начато вычисление промежутков параметров".format(self.id))
         # создание матрицы для вычисления промежутков
         x = np.ones_like(self.temp_norm_yws).reshape(-1, 1)
         x = np.hstack((x, self.temp_norm_yws.reshape(-1, 1), self.precip_norm_yws.reshape(-1, 1)))
+        # вычисляются оценки МНК
         a = np.linalg.inv(np.mat(np.transpose(x)) * np.mat(np.mat(x))) * np.mat(np.transpose(x)) * \
             (np.mat(self.norm_square.reshape(-1, 1)))
         e = np.mat(x) * np.mat(a)
         s2 = np.sum(np.power(e - self.norm_square.reshape(-1, 1), 2)) / len(self.square - 2)
         q = np.mat(np.transpose(x)) * np.mat(np.mat(x))
         self.alpha = [a[0] - 3 * np.sqrt(s2 * q[0, 0]), a[0] + 3 * np.sqrt(s2 * q[0, 0])]
+        logging.info("ID={}. Промежутки параметров для температуры {}".format(self.id, self.alpha))
         self.beta = [a[1] - 3 * np.sqrt(s2 * q[1, 1]), a[1] + 3 * np.sqrt(s2 * q[1, 1])]
-        logging.info("Окончено вычисление промежутков параметров")
+        logging.info("ID={}. Промежутки параметров для осадков {}".format(self.id, self.beta))
+        self.ksi = [a[2] - 3 * np.sqrt(s2 * q[2, 2]), a[2] + 3 * np.sqrt(s2 * q[2, 2])]
+        logging.info("ID={}. Промежутки параметров для ошибки {}".format(self.id, self.ksi))
+        logging.info("ID={}. Окончено вычисление промежутков параметров".format(self.id))
 
     def g_m(self, theta_m):
         return (np.exp(-self.ksi[0] * theta_m) * theta_m) * (self.ksi[0] * theta_m + 1) - \
@@ -88,18 +106,18 @@ class RandomizeRestoring:
         return f
 
     def theta_calc(self):
-        logging.info("Вычисление множителей Лагранжа")
+        logging.info("ID={}. Вычисление множителей Лагранжа".format(self.id))
         sol = optimize.root(self.func, np.ones_like(self.square), method="lm")
         if sol.success:
             self.theta = sol.x
-            logging.info("Успешно окончено вычисление множителей Лагранжа")
+            logging.info("ID={}. Успешно окончено вычисление множителей Лагранжа".format(self.id))
             return sol.x
         else:
-            logging.info("Вычисление множителей Лагранжа окончено неудачей")
+            logging.error("ID={}. Вычисление множителей Лагранжа окончено неудачей".format(self.id))
             return None
 
     def modeling(self, n=100):
-        logging.info("Начато моделирование")
+        logging.info("ID={}. Начато моделирование".format(self.id))
         s_mean = np.zeros_like(self.norm_temp)
         s_m = np.ones((len(self.norm_temp), n))
         for j in range(0, n):
@@ -108,7 +126,6 @@ class RandomizeRestoring:
                 s_m[i, j] = self.value_from_prv(TypesOfParameters.TEMPERATURE) * self.norm_temp[i] + \
                             self.value_from_prv(TypesOfParameters.PRECIPITATIONS) * self.norm_temp[i] + \
                             self.value_from_prv(TypesOfParameters.ERRORS, i)
-
         for i in range(0, len(self.temperature)):
             for j in range(0, n):
                 if i in self.num_years_with_square:
@@ -120,7 +137,7 @@ class RandomizeRestoring:
         square_dict = dict()
         for i in range(0, len(self.years)):
             square_dict[self.years[i]] = self.restored_square[i]
-        logging.info("Окончено моделирование")
+        logging.info("ID={}. Окончено моделирование".format(self.id))
         return square_dict
 
     def value_from_prv(self, type_of_parameter: TypesOfParameters, num=0):
@@ -193,5 +210,5 @@ class RandomizeRestoring:
         axs[2].plot(self.years, self.restored_square, 'g', self.years, f_sf, 'r', self.years, f_middle_f, 'g',
                     q + self.years[0], self.restored_square[q], '*r')
         axs[2].set_title("Площадь")
-        axs[2].set_xlabel('xlabel', size=10)
+        axs[2].set_xlabel('x_label', size=10)
         plt.show()

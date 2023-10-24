@@ -2,7 +2,7 @@ import logging
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 import asyncio
 from config import config
-from src.recovering import Recovering
+from src.recover import Recovering
 
 
 async def send_answer(mess, key, topic, headers):
@@ -36,7 +36,7 @@ async def consume():
                 logging.info("Импортированы данные из сообщения")
                 recovered_square = recovery.get_recovered_square()
             else:
-                logging.info("Данные из сообщения не удалось импортировать")
+                logging.error("Данные из сообщения не удалось импортировать")
                 recovered_square = None
             logging.info("Начало отправки ответа")
             await send_answer(mess=recovered_square, key=msg.key, topic=msg.topic, headers=msg.headers)
