@@ -2,6 +2,7 @@ import logging
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 import asyncio
 from config import config
+from src.forecast import Forecasting
 from src.recover import Recovering
 
 
@@ -40,6 +41,20 @@ async def consume():
                 recovered_square = None
             logging.info("Начало отправки ответа")
             await send_answer(mess=recovered_square, key=msg.key, topic=msg.topic, headers=msg.headers)
+
+        if msg.topic == 'ForecastRequest':
+            forecast = Forecasting(forecast_type="randomize_modeling", precipitation=None, temperature=None,
+                                   square=None,
+                                   period_type=None, task_id=None)
+            if forecast.import_from_message(msg.value):
+                logging.info("Импортированы данные из сообщения")
+                forecast.forecast()
+                forecast_square = None
+            else:
+                logging.error("Данные из сообщения не удалось импортировать")
+                forecast_square = None
+            logging.info("Начало отправки ответа")
+            await send_answer(mess=forecast_square, key=msg.key, topic=msg.topic, headers=msg.headers)
 
     try:
         pass

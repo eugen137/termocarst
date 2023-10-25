@@ -39,7 +39,7 @@ class Recovering(Processing):
         years_square = np.array(list(self._square.keys())).astype(int)
         rand_restoring = RandomizeRestoring(self.id, square=square, years_square=years_square, temperature=temperature,
                                             precipitation=precipitation, years=years, alpha=np.array([-2.7, 10]),
-                                            beta=np.array([-1.9, 10]), ksi=np.array([-0.05, 0.05]))
+                                            beta=np.array([-1.9, 10]), ksi=np.array([-0.15, 0.15]))
         rand_restoring.theta_calc()
         square = rand_restoring.modeling(200)
         return square
