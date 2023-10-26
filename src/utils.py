@@ -69,7 +69,7 @@ class Randomize(ABC):
         :param beta: Промежуток параметра Осадков
         :param ksi: Промежуток параметра Ошибки
         """
-
+        self.p = 0
         self.id = task_id
         logging.info("ID={}. Начато восстановление RandomizeRestoring".format(self.id), extra={"task_id": self.id})
         self.alpha = alpha.astype(np.float64)
@@ -101,7 +101,6 @@ class Randomize(ABC):
         self.__fo = None
         self.__q_err = None
         self.__mean_theta = None
-        self.params_gaps()
 
     def func(self, theta):
         pass
@@ -214,3 +213,11 @@ def generator(edges, prv):
         if max_value_prv * x2 <= prv(x1_):
             break
     return x1
+
+
+def is_none(a):
+    if a is None:
+        return True
+    if np.isnan(a):
+        return True
+    return False
