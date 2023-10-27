@@ -95,12 +95,12 @@ class Randomize(ABC):
         self.bounds = optimize.Bounds(-r * np.ones_like(self.norm_square),
                                       r * np.ones_like(self.norm_square))
         self.restored_square = None
-        self.__l_r = None
-        self.__ro = None
-        self.__h_r = None
-        self.__fo = None
-        self.__q_err = None
-        self.__mean_theta = None
+        self.calculated_l_r = None
+        self.calculated_ro = None
+        self.calculated_h_r = None
+        self.calculated_fo = None
+        self.calculated_q_err = None
+        self.calculated_mean_theta = None
 
     def func(self, theta):
         pass
@@ -150,27 +150,29 @@ class Randomize(ABC):
 
         if type_of_parameter == TypesOfParameters.TEMPERATURE:
             edges = self.alpha
-            lh_r = self.__l_r
-            rf_o = self.__ro
+            lh_r = self.calculated_l_r
+            rf_o = self.calculated_ro
 
         elif type_of_parameter == TypesOfParameters.PRECIPITATIONS:
             edges = self.beta
-            lh_r = self.__h_r
-            rf_o = self.__fo
+            lh_r = self.calculated_h_r
+            rf_o = self.calculated_fo
 
         else:
             # значит type_of_parameter == TypesOfParameters.ERRORS:
             edges = self.ksi
+            lh_r = None
 
         if type_of_parameter != TypesOfParameters.ERRORS:
-            def prv(x):
-                return np.exp(-x * lh_r) / rf_o
+            def prv(x, p_lh_r):
+
+                return np.exp(-x * p_lh_r) / rf_o
         else:
-            def prv(x):
-                q_err_k = (np.exp(-self.ksi[0] * self.__mean_theta) - np.exp(
-                    -self.ksi[1] * self.__mean_theta)) / self.__mean_theta
-                return np.exp(-x * self.__mean_theta) / q_err_k
-        return generator(edges, prv)
+            def prv(x, p_lh_r):
+                q_err_k = (np.exp(-self.ksi[0] * self.calculated_mean_theta) - np.exp(
+                    -self.ksi[1] * self.calculated_mean_theta)) / self.calculated_mean_theta
+                return np.exp(-x * self.calculated_mean_theta) / q_err_k
+        return generator(edges, prv, lh_r)
 
     def draw(self):
         q = []
@@ -204,13 +206,13 @@ def normalize(arr):
         (np.max(arr) - np.min(arr))
 
 
-def generator(edges, prv):
-    max_value_prv = max(prv(edges[0]), prv(edges[1]))
+def generator(edges, prv, lh_r):
+    max_value_prv = max(prv(edges[0], lh_r), prv(edges[1], lh_r))
     while True:
         x1 = np.random.rand()
         x2 = np.random.rand()
         x1_ = edges[0] + x1 * (edges[1] - edges[0])
-        if max_value_prv * x2 <= prv(x1_):
+        if max_value_prv * x2 <= prv(x1_, lh_r):
             break
     return x1
 

@@ -20,11 +20,12 @@ class RandomizeRestoring(Randomize):
         a = np.linalg.inv(np.mat(np.transpose(x)) * np.mat(np.mat(x))) * np.mat(np.transpose(x)) * \
             (np.mat(self.norm_square.reshape(-1, 1)))
         e = np.mat(x) * np.mat(a)
-        s2 = np.sum(np.power(e - self.norm_square.reshape(-1, 1), 2)) / len(self.square - 2)
+        s2 = np.sum(np.power(e - self.norm_square.reshape(-1, 1), 2)) / (len(self.square) - 2)
+        print(a)
         q = np.mat(np.transpose(x)) * np.mat(np.mat(x))
-        self.alpha = [a[0] - 3 * np.sqrt(s2 * q[0, 0]), a[0] + 3 * np.sqrt(s2 * q[0, 0])]
+        self.alpha = [a[0,0] - 3 * np.sqrt(s2 * q[0, 0]), a[0,0] + 3 * np.sqrt(s2 * q[0, 0])]
         logging.info("ID={}. Промежутки параметров для температуры {}".format(self.id, self.alpha))
-        self.beta = [a[1] - 3 * np.sqrt(s2 * q[1, 1]), a[1] + 3 * np.sqrt(s2 * q[1, 1])]
+        self.beta = [a[1,0] - 3 * np.sqrt(s2 * q[1, 1]), a[1,0] + 3 * np.sqrt(s2 * q[1, 1])]
         logging.info("ID={}. Промежутки параметров для осадков {}".format(self.id, self.beta))
         self.ksi = [- 3 * np.sqrt(s2), 3 * np.sqrt(s2)]
         logging.info("ID={}. Промежутки параметров для ошибки {}".format(self.id, self.ksi))
@@ -39,16 +40,17 @@ class RandomizeRestoring(Randomize):
         return f
 
     def calculate_static_param(self):
-        self.__l_r = np.sum(np.multiply(self.theta, self.temp_norm_yws))
-        self.__ro = (np.exp(-self.alpha[0] * self.__l_r) - np.exp(-self.alpha[1] * self.__l_r)) / self.__l_r
+        logging.info("ID={}. calculate_static_param".format(self.id))
+        self.calculated_l_r = np.sum(np.multiply(self.theta, self.temp_norm_yws))
+        self.calculated_ro = (np.exp(-self.alpha[0] * self.calculated_l_r) - np.exp(-self.alpha[1] * self.calculated_l_r)) / self.calculated_l_r
+        self.calculated_h_r = np.sum(np.multiply(self.theta, self.precip_norm_yws))
+        self.calculated_fo = (np.exp(-self.alpha[0] * self.calculated_h_r) - np.exp(-self.alpha[1] * self.calculated_h_r)) / self.calculated_h_r
 
-        self.__h_r = np.sum(np.multiply(self.theta, self.precip_norm_yws))
-        self.__fo = (np.exp(-self.alpha[0] * self.__h_r) - np.exp(-self.alpha[1] * self.__h_r)) / self.__h_r
-
-        self.__q_err = None
-        self.__mean_theta = np.mean(self.theta)
+        self.calculated_q_err = None
+        self.calculated_mean_theta = np.mean(self.theta)
 
     def modeling(self, n=100):
+        self.calculate_static_param()
         logging.info("ID={}. Начато моделирование".format(self.id))
         s_mean = np.zeros_like(self.norm_temp)
         s_m = np.ones((len(self.norm_temp), n))
@@ -118,7 +120,7 @@ class RandomizeForecasting(Randomize):
         a = np.linalg.inv(np.mat(np.transpose(x)) * np.mat(np.mat(x))) * np.mat(np.transpose(x)) * \
             (np.mat(self.norm_square.reshape(-1, 1)))
         e = np.mat(x) * np.mat(a)
-        s2 = np.sum(np.power(e - self.norm_square.reshape(-1, 1), 2)) / len(self.square - 2)
+        s2 = np.sum(np.power(e - self.norm_square.reshape(-1, 1), 2)) / (len(self.square) - 2)
         q = np.mat(np.transpose(x)) * np.mat(np.mat(x))
 
         self.square_param = []
