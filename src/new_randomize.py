@@ -48,6 +48,7 @@ class RandomizeParent(ABC):
     def learning(self):
         if self.need_for_restoration:
             pass
+
             # Пропуски восстановлены, меняем столбец с пропусками, на столбец без пропусков
             # TODO: сделать восстановление здесь
         # обучение модели (вычисление theta)
