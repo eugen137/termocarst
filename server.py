@@ -12,7 +12,6 @@ async def send_answer(mess, key, topic, headers):
         bootstrap_servers=config['KAFKA']['bootstrap_server'])
     await producer.start()
     try:
-        # mess = None
         val = str.encode(str(mess))
         logging.info("Конвертация сообщения в байт-строку {}".format(val))
         logging.info("Отправка сообщения в топик {}".format(topic_answer))
@@ -48,8 +47,7 @@ async def consume():
                                    period_type=None, task_id=None)
             if forecast.import_from_message(msg.value):
                 logging.info("Импортированы данные из сообщения")
-                forecast.forecast()
-                forecast_square = None
+                forecast_square = forecast.forecast()
             else:
                 logging.error("Данные из сообщения не удалось импортировать")
                 forecast_square = None

@@ -165,7 +165,6 @@ class Randomize(ABC):
 
         if type_of_parameter != TypesOfParameters.ERRORS:
             def prv(x, p_lh_r):
-
                 return np.exp(-x * p_lh_r) / rf_o
         else:
             def prv(x, p_lh_r):
@@ -213,6 +212,18 @@ def generator(edges, prv, lh_r):
         x2 = np.random.rand()
         x1_ = edges[0] + x1 * (edges[1] - edges[0])
         if max_value_prv * x2 <= prv(x1_, lh_r):
+            break
+    return x1_
+
+
+def generator_param(edges, prv):
+
+    max_value_prv = max(prv(edges[0]), prv(edges[1]))
+
+    while True:
+        x1 = edges[0] + np.random.uniform(0, 1) * (edges[1] - edges[0])
+        x2 = np.random.uniform(0,1)
+        if x2 <= prv(x1) / max_value_prv:
             break
     return x1
 
