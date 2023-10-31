@@ -1,7 +1,6 @@
 import json
-import numpy as np
-from src.new_randomize import RandomizeForecast
-from src.utils import Processing
+from src.randomize_modeling import RandomizeForecast
+from src.utils import Processing, make_data_matrix
 
 
 class Forecasting(Processing):
@@ -20,14 +19,17 @@ class Forecasting(Processing):
         return False
 
     def forecast(self):
-        years = list(self._temperature.keys())
-        years.sort()
-        data_ = np.ones((len(years), 3))
-        for i in range(0, len(years)):
-            data_[i, 0] = self._square[years[i]] if years[i] in self._square.keys() else None
-            data_[i, 1] = self._temperature[years[i]]
-            data_[i, 2] = self._precipitation[years[i]]
+        data_ = make_data_matrix(self._square, self._temperature, self._precipitation)
         rand_forecasting = RandomizeForecast(self.id, data_)
         rand_forecasting.learning()
-        square = rand_forecasting.modeling(500)
+        square = rand_forecasting.modeling(50000, self.period_type)
+        # найдем максимальный год
+        years = self._temperature.keys()
+        years = [int(y) for y in years]
+        years.sort()
+        forecast_year = rand_forecasting.time_parameter_values[self.period_type] + max(years)
+        self.calculated_square = self._square.copy()
+        for year in range(max(years) + 1, forecast_year + 1):
+            n = len(years) + year - max(years) - 1
+            self.calculated_square[str(year)] = square[n]
         return square

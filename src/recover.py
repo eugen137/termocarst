@@ -1,14 +1,14 @@
 import logging
 from uuid import uuid4
-
-import numpy as np
 from scipy import interpolate
-from src.randomize_modeling import RandomizeRestoring
-from src.utils import Processing
+
+from src.randomize_modeling import RandomizeRecover
+from src.utils import Processing, make_data_matrix
 
 
 class Recovering(Processing):
-    def __init__(self, type_recovery="randomize_modeling", precipitation=None, temperature=None, square=None, task_id=None):
+    def __init__(self, type_recovery="randomize_modeling", precipitation=None, temperature=None, square=None,
+                 task_id=None):
         task_id = task_id if task_id else uuid4()
         super().__init__(task_id, precipitation=precipitation, temperature=temperature, square=square)
         self.type = type_recovery
@@ -32,18 +32,12 @@ class Recovering(Processing):
         return square
 
     def __randomize_modeling(self):
-        square = np.array(list(self._square.values()))
-        temperature = np.array(list(self._temperature.values()))
-        precipitation = np.array(list(self._precipitation.values()))
-        years = np.array(list(self._precipitation.keys())).astype(int)
-        years_square = np.array(list(self._square.keys())).astype(int)
-        rand_restoring = RandomizeRestoring(self.id, square=square, years_square=years_square, temperature=temperature,
-                                            precipitation=precipitation, years=years, alpha=np.array([-2.7, 10]),
-                                            beta=np.array([-1.9, 10]), ksi=np.array([-0.15, 0.15]))
-        rand_restoring.theta_calc()
-        square = rand_restoring.modeling(200)
+
+        data_ = make_data_matrix(self._square, self._temperature, self._precipitation)
+        rand_restoring = RandomizeRecover(self.id, data_)
+        rand_restoring.learning()
+        square = rand_restoring.modeling(1000)
         return square
-        # return self.__square
 
     def get_recovered_square(self):
         if self.type == "polynomial":
