@@ -6,7 +6,7 @@ from src.forecast import Forecasting
 from src.recover import Recovering
 
 
-async def send_answer(mess, key, topic, headers):
+async def send_answer(mess, key, topic):
     topic_answer = 'RecoveryAnswer' if topic == 'RecoveryRequest' else 'ForecastAnswer'
     producer = AIOKafkaProducer(
         bootstrap_servers=config['KAFKA']['bootstrap_server'])
@@ -15,10 +15,10 @@ async def send_answer(mess, key, topic, headers):
         val = str.encode(str(mess))
         logging.info("Конвертация сообщения в байт-строку {}".format(val))
         logging.info("Отправка сообщения в топик {}".format(topic_answer))
-        await producer.send_and_wait(topic=topic_answer, value=val, key=key, headers=headers)
+        await producer.send_and_wait(topic=topic_answer, value=val, key=key)
         logging.info("Ответ отправлен")
-    except:
-        logging.info("Неудача с отправлением сообщения {}".format(mess.keys()))
+    except TypeError:
+        logging.info("Неудача с отправлением сообщения {}".format(mess))
     finally:
         await producer.stop()
 
@@ -39,7 +39,7 @@ async def consume():
                 logging.error("Данные из сообщения не удалось импортировать")
                 recovered_square = None
             logging.info("Начало отправки ответа")
-            await send_answer(mess=recovered_square, key=msg.key, topic=msg.topic, headers=msg.headers)
+            await send_answer(mess=recovered_square, key=msg.key, topic=msg.topic)
 
         if msg.topic == 'ForecastRequest':
             forecast = Forecasting(forecast_type="randomize_modeling", precipitation=None, temperature=None,
@@ -52,7 +52,7 @@ async def consume():
                 logging.error("Данные из сообщения не удалось импортировать")
                 forecast_square = None
             logging.info("Начало отправки ответа")
-            await send_answer(mess=forecast_square, key=msg.key, topic=msg.topic, headers=msg.headers)
+            await send_answer(mess=forecast_square, key=msg.key, topic=msg.topic)
 
     try:
         pass

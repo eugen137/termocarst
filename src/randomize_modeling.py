@@ -2,6 +2,8 @@ import logging
 from abc import ABC
 import numpy as np
 from scipy import optimize
+
+from config import config
 from src.utils import is_none, generator_param
 
 
@@ -85,7 +87,8 @@ class RandomizeParent(ABC):
                 if self.__class__.__name__ == "RandomizeForecast":
                     recover = RandomizeRecover(self.id, self.data, self.param_names)
                     recover.learning()
-                    recovered_data = recover.modeling(50000)
+                    n = int(config["RANDOMIZE_CONFIG"]["randomize.number_of_random_trajectories_restoring"])
+                    recovered_data = recover.modeling(n)
                     self.data[:, 0] = recovered_data
                     self.need_for_restoration = False
                     self.data_gaps = []
@@ -319,9 +322,9 @@ class RandomizeForecast(RandomizeParent):
 
         super().__init__(task_id, data, param_names)
         if time_parameter_values is None:
-            time_parameter_values = {"short": 5,
-                                     "middle": 10,
-                                     "long": 15}
+            time_parameter_values = {"short": int(config["RANDOMIZE_CONFIG"]["randomize.short_time_period"]),
+                                     "middle": int(config["RANDOMIZE_CONFIG"]["randomize.middle_time_period"]),
+                                     "long": int(config["RANDOMIZE_CONFIG"]["randomize.long_time_period"])}
         self.time_parameter_values = time_parameter_values
 
     def modeling(self, n=100, period_type="short", secondary=False):
@@ -331,7 +334,6 @@ class RandomizeForecast(RandomizeParent):
             forecast_years = self.time_parameter_values[period_type]
         else:
             forecast_years = 0
-        print("forecast_years", forecast_years)
         forecast_matrix = np.zeros((forecast_years, self.memory_param))
         forecast_matrix = np.hstack((np.ones((forecast_years, 1)), forecast_matrix))
 

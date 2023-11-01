@@ -1,4 +1,6 @@
 import json
+
+from config import config
 from src.randomize_modeling import RandomizeForecast
 from src.utils import Processing, make_data_matrix
 
@@ -22,7 +24,9 @@ class Forecasting(Processing):
         data_ = make_data_matrix(self._square, self._temperature, self._precipitation)
         rand_forecasting = RandomizeForecast(self.id, data_)
         rand_forecasting.learning()
-        square = rand_forecasting.modeling(50000, self.period_type)
+        n = int(config["RANDOMIZE_CONFIG"]["randomize.number_of_random_trajectories_forecasting"])
+        square = rand_forecasting.modeling(n, self.period_type)
+
         # найдем максимальный год
         years = self._temperature.keys()
         years = [int(y) for y in years]
@@ -32,5 +36,4 @@ class Forecasting(Processing):
         for year in range(max(years) + 1, forecast_year + 1):
             n = len(years) + year - max(years) - 1
             self.calculated_square[str(year)] = square[n]
-        print(self.calculated_square)
         return square
