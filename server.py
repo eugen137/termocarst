@@ -15,7 +15,7 @@ async def send_answer(mess, key, topic, headers):
         val = str.encode(str(mess))
         logging.info("Конвертация сообщения в байт-строку {}".format(val))
         logging.info("Отправка сообщения в топик {}".format(topic_answer))
-        await producer.send_and_wait(topic=topic_answer, value=val, key=key)
+        await producer.send_and_wait(topic=topic_answer, value=val, key=key, headers=headers)
         logging.info("Ответ отправлен")
     except:
         logging.info("Неудача с отправлением сообщения {}".format(mess.keys()))
