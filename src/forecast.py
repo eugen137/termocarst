@@ -32,4 +32,5 @@ class Forecasting(Processing):
         for year in range(max(years) + 1, forecast_year + 1):
             n = len(years) + year - max(years) - 1
             self.calculated_square[str(year)] = square[n]
+        print(self.calculated_square)
         return square
