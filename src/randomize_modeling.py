@@ -3,7 +3,7 @@ from abc import ABC
 import numpy as np
 from scipy import optimize
 
-from config import config
+from src.config import config
 from src.utils import is_none, generator_param
 
 

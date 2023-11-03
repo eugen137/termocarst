@@ -1,10 +1,8 @@
-import concurrent.futures
 import logging
-from time import sleep
 
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 import asyncio
-from config import config
+from src.config import config
 from src.forecast import Forecasting
 from src.recover import Recovering
 
