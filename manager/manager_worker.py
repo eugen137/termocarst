@@ -1,12 +1,12 @@
-from manager.utils import ServerState, send_to_current_task
+from manager.utils import WorkerState, send_to_current_task
 
 
 class Worker:
     def __init__(self, id_):
         self.id = id_
-        self.state = ServerState.free
+        self.state = WorkerState.free
         self.task_message = {}
 
-    def start_work(self):
+    async def start_work(self):
+        self.state = WorkerState.busy
         await send_to_current_task(self.task_message, self.id)
-        self.state = ServerState.busy

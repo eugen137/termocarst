@@ -34,10 +34,10 @@ services:
     links:
       - kafka
       - zookeeper
-  pak:
-    build: .
-    links:
-      - kafka
-      - zookeeper
-    depends_on:
-      - kafka
+#  pak:
+#    build: .
+#    links:
+#      - kafka
+#      - zookeeper
+#    depends_on:
+#      - kafka
