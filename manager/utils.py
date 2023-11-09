@@ -1,9 +1,10 @@
 import enum
+import json
 import logging
 
 from aiokafka import AIOKafkaProducer
 
-from manager.config import config
+from manager.configuration import static_config
 
 
 class State(enum.Enum):
@@ -23,11 +24,11 @@ class WorkerState(enum.Enum):
 async def send_to_current_task(mess, key):
     topic = "CurrentTasks"
     producer = AIOKafkaProducer(
-        bootstrap_servers=config['KAFKA']['bootstrap_server'])
+        bootstrap_servers=static_config['KAFKA']['bootstrap_server'])
     await producer.start()
     try:
-        val = str.encode(str(mess))
-        key = str.encode(key)
+        val = bytes(json.dumps(mess, indent=4), 'UTF-8')
+        key = bytes(key, 'UTF-8')
         logging.info("Конвертация сообщения в байт-строку {}".format(val))
         logging.info("Отправка сообщения в топик {}".format(topic))
         await producer.send_and_wait(topic=topic, value=val, key=key)
@@ -37,29 +38,11 @@ async def send_to_current_task(mess, key):
     finally:
         await producer.stop()
 
-
-
-async def send_to_current_task(mess, key):
-    topic = "CurrentTasks"
-    producer = AIOKafkaProducer(
-        bootstrap_servers=config['KAFKA']['bootstrap_server'])
-    await producer.start()
-    try:
-        val = str.encode(str(mess))
-        key = str.encode(key)
-        logging.info("Конвертация сообщения в байт-строку {}".format(val))
-        logging.info("Отправка сообщения в топик {}".format(topic))
-        await producer.send_and_wait(topic=topic, value=val, key=key)
-        logging.info("Ответ отправлен")
-    except TypeError:
-        logging.info("Неудача с отправлением сообщения message {} key {} в топик {}".format(mess, key, topic))
-    finally:
-        await producer.stop()
 
 async def send_answer(mess, key, topic):
     topic_answer = 'RecoveryAnswer' if topic == 'RecoveryRequest' else 'ForecastAnswer'
     producer = AIOKafkaProducer(
-        bootstrap_servers=config['KAFKA']['bootstrap_server'])
+        bootstrap_servers=static_config['KAFKA']['bootstrap_server'])
     await producer.start()
     try:
         val = str.encode(str(mess))

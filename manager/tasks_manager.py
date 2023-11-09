@@ -3,7 +3,7 @@ import logging
 import uuid
 import numpy as np
 
-from manager.config import config
+from manager.configuration import static_config
 from manager.tasks import RecoveryTask, ForecastTask
 from manager.utils import State
 
@@ -46,11 +46,11 @@ class TaskManager:
             if "period_type" in message.keys():
                 period_type = message["period_type"]
                 if period_type == "short":
-                    self.forecast_years = int(config["RANDOMIZE_CONFIG"]["randomize.short_time_period"])
+                    self.forecast_years = int(static_config["RANDOMIZE_CONFIG"]["randomize.short_time_period"])
                 elif period_type == "middle":
-                    self.forecast_years = int(config["RANDOMIZE_CONFIG"]["randomize.middle_time_period"])
+                    self.forecast_years = int(static_config["RANDOMIZE_CONFIG"]["randomize.middle_time_period"])
                 elif period_type == "long":
-                    self.forecast_years = int(config["RANDOMIZE_CONFIG"]["randomize.long_time_period"])
+                    self.forecast_years = int(static_config["RANDOMIZE_CONFIG"]["randomize.long_time_period"])
             else:
                 self.forecast_years = 5
 
@@ -73,13 +73,16 @@ class TaskManager:
 
         # соберем данные
         self.secondary_param_matrix = np.zeros((len(years), len(secondary_params)))
-        self.main_param_array = np.zeros_like(np.array(years))
+        self.main_param_array = np.zeros(len(years))
         for i in range(0, len(years)):
+            self.main_param_array[i] = param_data[self.main_param_name][years[i]]
             for j in range(0, len(secondary_params)):
                 logging.info("Импорт второстепенного параметра {}".format(secondary_params[j]))
                 self.secondary_param_matrix[i, j] = param_data[secondary_params[j]][years[i]]
-                self.main_param_array[i] = param_data[self.main_param_name][years[i]] \
-                    if years[i] in param_data[self.main_param_name].keys() else None
+
+                    # \
+                    # if years[i] in param_data[self.main_param_name].keys() else None
+        print(self.main_param_array)
 
     def _test_data(self):
         # TODO: добавить тестирование
@@ -97,6 +100,8 @@ class TaskManager:
                                      count_of_trajectories=self.count_of_trajectories)
 
     def receive_message(self, message: dict):
+        logging.info("Пришло сообщение в таск менеджер")
+        message["parent_ids"].pop(0)
         self.task.receive_message(message)
 
     def make_message(self):

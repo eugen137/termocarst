@@ -4,13 +4,13 @@ import os
 import sys
 from logging.handlers import RotatingFileHandler
 
-config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
-config.read('./manager/manager_configuration.ini')
+static_config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
+static_config.read('./manager/manager_configuration.ini')
 
-log_file_dir = config['LOGGING']['logging.directory']
-log_file_name = config['LOGGING']['logging.file.name']
-maxBytes = int(config['LOGGING']['logging.maxBytes'])
-backupCount = int(config['LOGGING']['logging.backupCount'])
+log_file_dir = static_config['LOGGING']['logging.directory']
+log_file_name = static_config['LOGGING']['logging.file.name']
+maxBytes = int(static_config['LOGGING']['logging.maxBytes'])
+backupCount = int(static_config['LOGGING']['logging.backupCount'])
 
 if not os.path.exists(log_file_dir):
     os.mkdir(log_file_dir)
