@@ -5,7 +5,7 @@ import sys
 from logging.handlers import RotatingFileHandler
 
 static_config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
-static_config.read('./manager/manager_configuration.ini')
+static_config.read('manager_configuration.ini')
 
 log_file_dir = static_config['LOGGING']['logging.directory']
 log_file_name = static_config['LOGGING']['logging.file.name']

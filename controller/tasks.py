@@ -1,13 +1,12 @@
 import logging
 import uuid
 import numpy as np
-from manager.utils import State
+from utils import State
 
 
 class Task:
     def __init__(self, parent_ids, main_param, second_param, main_param_name, second_param_names=None, id_=None,
                  count_of_trajectories=100):
-
         self.id = id_ if id_ is not None else str(uuid.uuid4())
         self.parent_ids = parent_ids if type(parent_ids) is list else [parent_ids]
         self.main_param = main_param
@@ -18,6 +17,7 @@ class Task:
         self.result = None
         self.child_tasks = []
         self.count_of_trajectories = count_of_trajectories
+        logging.info("Создана задача с типом {}, главный параметр {}".format(self.__class__.__name__, main_param_name))
 
     def all_children_is_finished(self):
         logging.info("id={}, Проверка детей на выполнение".format(self.id))
@@ -54,7 +54,7 @@ class Task:
         logging.info("id={}, Запущена генерация сообщения задачи {}".format(self.id, self.id))
         messages = []
         # если задача выполняется - то нам нечего возвращать
-        if self.state == State.running or self.state == State.finished:
+        if self.state == State.running or self.state == State.finished or self.result is not None:
             logging.info("id={}, Задача {} в процессе выполнения, сообщение не готово".format(self.id, self.id))
             return messages
         parent_ids = self.parent_ids.copy()
@@ -64,8 +64,10 @@ class Task:
             "ids_path": parent_ids,
             "main_param": list(self.main_param),
             "second_param": second_param,
+            "count_of_trajectories": self.count_of_trajectories,
             "type": self.__class__.__name__
         }
+        self.state = State.running
         messages.append(task_message)
         logging.info("id={}, Сообщение сгенерировано {}".format(self.id, messages))
         return messages
@@ -112,7 +114,7 @@ class ForecastTask(Task):
             self.state = State.wait
 
     def check_need_for_recover(self):
-        if len(np.where(self.main_param == None)[0]) == 0:
+        if np.count_nonzero(np.isnan(self.main_param)) == 0:
             return False
         return True
 
@@ -124,11 +126,13 @@ class ForecastTask(Task):
             return
 
         # проверяем - было ли восстановление
+        print([t.__class__.__name__ for t in self.child_tasks])
         recovery_task = list(filter(lambda x: x.__class__.__name__ == "RecoveryTask", self.child_tasks))
         if len(recovery_task) != 0:
             logging.info("id={}, Было восстановление, забираем восстановленные параметры {}".format(self.id, self.id))
             # если было восстановление - то заменяем старые данные восстановленными
-            self.main_param = recovery_task[0].main_param
+            print(recovery_task[0].main_param)
+            self.main_param = recovery_task[0].result
 
         if self.second_param.shape == (0,):
             logging.info("id={}, Второстепенных параметров в задаче нет".format(self.id))
@@ -154,7 +158,7 @@ class ForecastTask(Task):
         logging.info("id={}, Запущена генерация сообщения задачи прогнозирования {}".format(self.id, self.id))
         messages = []
 
-        if  self.state == State.running or self.state == State.finished:
+        if self.state == State.running or self.state == State.finished or self.result is not None:
             return messages
 
         # проверим есть ли не оконченные задачи
@@ -162,11 +166,15 @@ class ForecastTask(Task):
             logging.info("id={}, Все дочерние процессы выполнены".format(self.id))
             self.collect_child_data()
             messages.extend(super().make_message())
-            if len(self.child_tasks) != 0:
+            if self.state == State.wait:
                 self.state = State.running
 
         # проверим сообщения от детей
         for task in self.child_tasks:
             child_message = task.make_message()
             messages.extend(child_message)
-        return messages
+        messages_new = []
+        for m in messages:
+            m["forecast_years"] = self.forecast_years
+            messages_new.append(m)
+        return messages_new

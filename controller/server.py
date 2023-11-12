@@ -3,8 +3,8 @@ import json
 import logging
 
 from aiokafka import AIOKafkaConsumer
-from manager.configuration import static_config
-from manager.queue import Queue
+from configuration import static_config
+from queue_tasks_worker import Queue
 
 
 async def master_manager():

@@ -1,8 +1,9 @@
 import logging
+import uuid
 
-from manager.manager_worker import Worker
-from manager.tasks_manager import TaskManager
-from manager.utils import WorkerState
+from manager_worker import Worker
+from tasks_manager import TaskManager
+from utils import WorkerState, send_answer
 
 
 class Queue:
@@ -11,11 +12,13 @@ class Queue:
     task_managers = dict()
 
     async def add_main_task_message(self, message, type_task):
-        task_manager = TaskManager()
-        task_manager.import_from_message(message, type_task=type_task)
-        self.task_managers[task_manager.id] = task_manager
-        self.task_managers[task_manager.id].make_task()
-        mess = self.task_managers[task_manager.id].make_message()
+        logging.info("Добавление сообщения {}".format(message))
+        logging.info("Перед добавлением {}".format(self.task_managers))
+        id_ = message["id"] if "id" in message.keys() else str(uuid.uuid4())
+        self.task_managers[id_] = TaskManager(message, type_task=type_task, task_id=id_)
+        self.task_managers[id_].make_task()
+        logging.info("После добавления {}".format(self.task_managers))
+        mess = self.task_managers[id_].make_message()
         await self.add_task_message(mess)
 
     async def add_task_message(self, message: list):
@@ -34,8 +37,10 @@ class Queue:
         self.task_managers[id_].receive_message(result)
         answer = self.task_managers[id_].make_message()
         if self.task_managers[id_].finished:
-            # TODO: задача выполнена, нужно отправить результат
             print("задача выполнена")
+            t = self.task_managers[id_].type
+            topic = "RecoveryAnswer" if t == "recovery" else "ForecastAnswer"
+            await send_answer(answer, "answer", topic)
         else:
             # если задача не выполнена, то задача продолжается, добавляем в очередь вычисления
             await self.add_task_message(answer)
@@ -64,11 +69,14 @@ class Queue:
         free_workers = []
         for worker in self.workers.values():
             if worker.state == WorkerState.free:
+                logging.info("Воркер {} свободен".format(worker.id))
                 free_workers.append(worker.id)
+        logging.info("Количество задач для воркеров {}".format(len(self.messages_for_workers)))
         for worker in free_workers:
             if len(self.messages_for_workers) == 0:
                 break
+
             message = self.messages_for_workers.pop(0)
-            logging.info("Задача {} назначена воркеру {}".format(message, worker))
             self.workers[worker].task_message = message
+            logging.info("Задача {} назначена воркеру {}".format(message["ids_path"], worker))
             await self.workers[worker].start_work()

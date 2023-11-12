@@ -1,5 +1,6 @@
   {"period_type": "short",
     "main_param_name": "square",
+    "count_of_trajectories": 10000,
     "data": {
     "precipitation": {
       "1985": 271,

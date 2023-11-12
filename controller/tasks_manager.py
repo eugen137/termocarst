@@ -3,16 +3,16 @@ import logging
 import uuid
 import numpy as np
 
-from manager.configuration import static_config
-from manager.tasks import RecoveryTask, ForecastTask
-from manager.utils import State
+from configuration import static_config
+from tasks import RecoveryTask, ForecastTask
+from utils import State
 
 
 class TaskManager:
     """
     Элемент менеджера задач
     """
-    def __init__(self, task_id=None, main_param_array=None, secondary_param_matrix=None, count_of_trajectories=None):
+    def __init__(self,  message: dict, type_task: str, task_id=None, main_param_array=None, secondary_param_matrix=None, count_of_trajectories=None):
         self.main_param_array = main_param_array
         self.secondary_param_matrix = secondary_param_matrix
         self.id = task_id
@@ -29,14 +29,17 @@ class TaskManager:
         else:
             self.count_of_trajectories = count_of_trajectories
 
+        self.import_from_message(message, type_task)
+
     def import_from_message(self, message: dict, type_task: str):
         """Импорт данных из сообщения
         :param message: сообщение прочитанное из кафки
         :param type_task : тип главной задачи (прогнозирование(recovery) или восстановление(forecast))
         """
-
         # забираем описание задачи
-        self.id = message["id"] if "id" in message.keys() else str(uuid.uuid4())
+        if self.id is None:
+            self.id = message["id"] if "id" in message.keys() else str(uuid.uuid4())
+        logging.info("id={}. Импорт таск".format(self.id))
         self.main_param_name = message["main_param_name"] if "main_param_name" in message.keys() else "square"
         self.count_of_trajectories = message["count_of_trajectories"] \
             if "count_of_trajectories" in message.keys() else self.count_of_trajectories
@@ -75,29 +78,31 @@ class TaskManager:
         self.secondary_param_matrix = np.zeros((len(years), len(secondary_params)))
         self.main_param_array = np.zeros(len(years))
         for i in range(0, len(years)):
-            self.main_param_array[i] = param_data[self.main_param_name][years[i]]
+            self.main_param_array[i] = param_data[self.main_param_name][years[i]] \
+                if years[i] in param_data[self.main_param_name].keys() else None
             for j in range(0, len(secondary_params)):
-                logging.info("Импорт второстепенного параметра {}".format(secondary_params[j]))
                 self.secondary_param_matrix[i, j] = param_data[secondary_params[j]][years[i]]
-
-                    # \
-                    # if years[i] in param_data[self.main_param_name].keys() else None
-        print(self.main_param_array)
 
     def _test_data(self):
         # TODO: добавить тестирование
         return True
 
     def make_task(self):
+        logging.info("***********************Начато создание задач****************************")
         if self.type == "recovery":
+            logging.info("Создается основная задача восстановления")
             self.task = RecoveryTask(id_=self.id, parent_ids=[self.id], main_param=self.main_param_array,
                                      second_param=self.secondary_param_matrix, main_param_name=self.main_param_name,
                                      count_of_trajectories=self.count_of_trajectories)
+            logging.info("Создана основная задача восстановления")
         else:
+            logging.info("Создается основная задача прогнозирования")
             self.task = ForecastTask(id_=self.id, parent_ids=[self.id], main_param=self.main_param_array,
                                      second_param=self.secondary_param_matrix, main_param_name=self.main_param_name,
                                      second_param_names=self.secondary_param_names,
                                      count_of_trajectories=self.count_of_trajectories)
+            logging.info("Создана основная задача прогнозирования")
+        logging.info("***********************Окончено создание задач****************************")
 
     def receive_message(self, message: dict):
         logging.info("Пришло сообщение в таск менеджер")
@@ -108,4 +113,11 @@ class TaskManager:
         message = self.task.make_message()
         if self.task.state == State.finished:
             self.finished = True
+            second_param = self.task.second_param.tolist() if type(self.task.second_param) is np.ndarray else None
+            message = {"id": self.id,
+                       "main_param_name": self.main_param_name,
+                       "result": self.task.result,
+                       "secondary_param_names": self.task.second_param_names,
+                       "secondary_param": second_param
+                       }
         return message

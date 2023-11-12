@@ -1,6 +1,6 @@
 import logging
 
-from manager.utils import WorkerState, send_to_current_task
+from utils import WorkerState, send_to_current_task
 
 
 class Worker:

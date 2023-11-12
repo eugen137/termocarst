@@ -35,28 +35,22 @@ services:
       - kafka
       - zookeeper
 
-  manager:
-    build: ./manager
+  controller:
+    build: controller
     links:
       - kafka
       - zookeeper
     depends_on:
       - kafka
 
-  worker1:
-    build: ./worker
+  worker_node1:
+    build: worker_node
     links:
       - kafka
       - zookeeper
     depends_on:
       - kafka
-      - manager
-
-  worker2:
-    build: ./worker
-    links:
-      - kafka
-      - zookeeper
-    depends_on:
-      - kafka
-      - manager
+      - controller
+    deploy:
+      mode: replicated
+      replicas: 3

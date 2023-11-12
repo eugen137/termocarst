@@ -4,7 +4,7 @@ from enum import Enum
 import numpy as np
 from aiokafka import AIOKafkaProducer
 
-from worker.config import config
+from config import config
 
 
 class TypesOfParameters(Enum):
@@ -77,7 +77,6 @@ async def send_message(topic, mess, key):
     await producer.start()
     try:
         val = bytes(str(mess).replace("'", '"'), 'UTF-8')
-        # print(val)
         key = bytes(json.dumps(key.replace("'", '"'), indent=4), 'UTF-8')
         logging.info("Конвертация сообщения в байт-строку {}".format(val))
         logging.info("Отправка сообщения в топик {}".format(topic))

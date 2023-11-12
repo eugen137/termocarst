@@ -3,8 +3,8 @@ from abc import ABC
 import numpy as np
 from scipy import optimize
 
-from worker.config import config
-from worker.utils import is_none, generator_param
+from config import config
+from utils import is_none, generator_param
 
 
 class RandomizeParent(ABC):
@@ -33,7 +33,6 @@ class RandomizeParent(ABC):
 
         self.operating_data = np.array([])
         self.data_analysis()  # анализ данных
-
         self.memory_param_calc()  # вычисление порядка
         self.operation_data_preparation()  # подготовка данных с учетом порядка памяти
         self.param_limits_calc()
@@ -89,7 +88,7 @@ class RandomizeParent(ABC):
             return
         logging.info("ID={}. Вычисление порядка.".format(self.id))
         arg = self.target_array
-        print(arg)
+
         s_mean = np.mean(arg)
         len_s = len(arg)
         k = 0
@@ -123,7 +122,6 @@ class RandomizeParent(ABC):
 
         # добавляем дополнительные параметры
         if data is None:
-            print(data)
             for i in range(0, data.shape[1]):
                 try:
                     # при добавлении пропускаем self.data[i, 0] так как он является пропуском в данных
@@ -360,14 +358,18 @@ class RandomizeRecover(RandomizeParent):
                                 (self.min_max["max"] - self.min_max["min"])
 
     def __init__(self, task_id, main_param: np.ndarray, secondary_param: np.ndarray):
-        super().__init__(task_id, main_param, secondary_param)
         self.data_for_restore = np.array([])
         self.target_array_for_restore = np.array([])
+        super().__init__(task_id, main_param, secondary_param)
+
+    def operation_data_preparation(self):
+        self.normalization_data()
 
     def data_analysis(self):
         super().data_analysis()
         old_target_array = self.target_array.copy()
         self.target_array = np.array([])
+        self.operating_data = np.array([])
 
         for i in range(0, len(old_target_array)):
             if is_none(old_target_array[i]):
@@ -386,7 +388,7 @@ class RandomizeRecover(RandomizeParent):
             else:
                 try:
                     self.operating_data = np.vstack((self.operating_data, self.data[i, :]))
-                    self.target_array = np.hstack((self.target_array, old_target_array))
+                    self.target_array = np.hstack((self.target_array, old_target_array[i]))
                 except ValueError:
                     self.operating_data = self.data[i, :]
                     self.target_array = old_target_array[i]
@@ -422,6 +424,6 @@ class RandomizeRecover(RandomizeParent):
                 ans2.append(ans[k])
                 k += 1
             else:
-                ans2.append(self.data[i, 0])
+                ans2.append(self.target_array_bk[i])
         logging.info("ID={}. Восстановление окончено ".format(self.id))
         return np.array(ans2)
