@@ -1,6 +1,6 @@
 import json
 
-from config import config
+from src.config import config
 from src.randomize_modeling import RandomizeForecast
 from src.utils import Processing, make_data_matrix
 

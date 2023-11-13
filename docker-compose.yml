@@ -29,15 +29,28 @@ services:
     restart: always
     environment:
       - KAFKA_CLUSTERS_0_NAME=local
-      - 'KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:29092,kafka2:29093'
+      - 'KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:29092'
       - 'KAFKA_CLUSTERS_0_ZOOKEEPER=zookeeper:2181'
     links:
       - kafka
       - zookeeper
-  pak:
-    build: .
+
+  controller:
+    build: controller
     links:
       - kafka
       - zookeeper
     depends_on:
       - kafka
+
+  worker_node1:
+    build: worker_node
+    links:
+      - kafka
+      - zookeeper
+    depends_on:
+      - kafka
+      - controller
+    deploy:
+      mode: replicated
+      replicas: 3

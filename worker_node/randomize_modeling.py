@@ -3,51 +3,42 @@ from abc import ABC
 import numpy as np
 from scipy import optimize
 
-from src.config import config
-from src.utils import is_none, generator_param
+from config import config
+from utils import is_none, generator_param
 
 
 class RandomizeParent(ABC):
 
-    def __init__(self, task_id, data: np.ndarray, param_names=None):
+    def __init__(self, task_id, main_param: np.ndarray, secondary_param: np.ndarray):
         """
         Класс рандомизированного прогнозирования.
         :param task_id: ID задачи
-        :param data: Матрица с данными, первый столбец - целевой аргумент(например, площадь), если есть пропуски в
-            данных - они равны None, второй (в случае прогнозирования/восстановления площади) - температура,
-            третий (в случае прогнозирования/восстановления площади) - осадки
-        :param param_names - названия параметров (например, ["Площадь, Осадки, Температура"])
         """
-        if param_names is None:
-            param_names = ["Площадь", "Температура", "Осадки"]
-        else:
-            if type(param_names) != list:
-                param_names = [param_names]
-        self.param_names = param_names
+
         self.memory_param = 0
+        self.target_array = main_param
+        self.target_array_bk = main_param.copy()
         self.id = task_id
-        logging.info("ID={}. Целевой параметр: {}. "
-                     "Начата работа Рандомизированного алгоритма".format(self.id, self.param_names[0]),
-                     extra={"task_id": self.id, })
-        self.data = data
+        logging.info("ID={}. "
+                     "Начата работа Рандомизированного алгоритма".format(self.id),
+                     extra={"task_id": self.id})
+        self.data = secondary_param
         self.theta = None
-        self.need_for_restoration = False
         self.param_limits = []
         self.error_limits = []
 
         # подготовка данных
         self.min_max = dict()
         self.data_gaps = []
-        self.data_for_restore = np.array([])
+
         self.operating_data = np.array([])
         self.data_analysis()  # анализ данных
-
-        self.target_array = self.operating_data[:, 0]  # целевой параметр
         self.memory_param_calc()  # вычисление порядка
         self.operation_data_preparation()  # подготовка данных с учетом порядка памяти
         self.param_limits_calc()
 
     def learning(self):
+        logging.info("Запуск обучения")
         # обучение модели (вычисление theta)
         self.theta_calc()
 
@@ -56,62 +47,36 @@ class RandomizeParent(ABC):
         Метод анализа данных, проверка размерности, наличия данных, поиск пропусков.\n
         После работы метода:
          - данные без пропусков сохраняются в self.operating_data
-         - признак потребности восстановления сохраняется в self.need_for_restoration
         :return: True|False - пройдена или не пройдена проверка
         """
-        logging.info("ID={}. Целевой параметр: {}. Анализ входных данных.".format(self.id, self.param_names[0],
-                                                                                  self.param_names[0]),
-                     extra={"task_id": self.id, })
+        logging.info("Запуск анализа данных")
+        if self.data is None:
+            return
+        logging.info("ID={}. Анализ входных данных.".format(self.id),
+                     extra={"task_id": self.id})
         if len(self.data.shape) != 2:
             logging.error(
-                "ID={}. Целевой параметр: {}. Проверка размерности не прошла.".format(self.id, self.param_names[0]),
-                extra={"task_id": self.id, })
+                "ID={}. Проверка размерности не прошла.".format(self.id),
+                extra={"task_id": self.id})
             return False
 
-        logging.debug("ID={}. Целевой параметр: {}. "
-                      "Проверка всех данных, кроме первого столбца.".format(self.id, self.param_names[0]),
-                      extra={"task_id": self.id, })
+        logging.debug("ID={}. "
+                      "Проверка всех данных, кроме первого столбца.".format(self.id),
+                      extra={"task_id": self.id})
         for i in range(0, self.data.shape[0]):
-            for j in range(1, self.data.shape[1]):
+            for j in range(0, self.data.shape[1]):
                 if is_none(self.data[i, j]):
-                    logging.error("ID={}. Целевой параметр: {}. "
-                                  "Проверка всех данных не прошла.".format(self.id, self.param_names[0]),
-                                  extra={"task_id": self.id, })
+                    logging.error("ID={}. "
+                                  "Проверка всех данных не прошла.".format(self.id),
+                                  extra={"task_id": self.id})
                     return False
 
         logging.debug(
-            "ID={}. Целевой параметр: {}. Поиск пропусков в первом столбце".format(self.id, self.param_names[0]),
-            extra={"task_id": self.id, })
-        for i in range(0, self.data.shape[0]):
-            if is_none(self.data[i, 0]):
-                if self.__class__.__name__ == "RandomizeForecast":
-                    recover = RandomizeRecover(self.id, self.data, self.param_names)
-                    recover.learning()
-                    n = int(config["RANDOMIZE_CONFIG"]["randomize.number_of_random_trajectories_restoring"])
-                    recovered_data = recover.modeling(n)
-                    self.data[:, 0] = recovered_data
-                    self.need_for_restoration = False
-                    self.data_gaps = []
-                    self.data_for_restore = np.array([])
-                    self.operating_data = np.array([])
-                    self.data_analysis()
-                # Если есть пропуски в целевом параметре - номер добавляем в self.data_gaps номер
-                # и в self.data_for_restore добавляем данные
-                self.data_gaps.append(i)
-                self.need_for_restoration = True
+            "ID={}. Поиск пропусков в первом столбце".format(self.id),
+            extra={"task_id": self.id})
 
-                try:
-                    # при добавлении пропускаем self.data[i, 0] так как он является пропуском в данных
-                    self.data_for_restore = np.vstack((self.data_for_restore, self.data[i, 1:]))
-                except ValueError:
-                    self.data_for_restore = self.data[i, 1:]
-            else:
-                try:
-                    self.operating_data = np.vstack((self.operating_data, self.data[i, :]))
-                except ValueError:
-                    self.operating_data = self.data[i, :]
-        logging.debug("ID={}. Целевой параметр: {}. Проверка данных окончена".format(self.id, self.param_names[0]),
-                      extra={"task_id": self.id, })
+        logging.debug("ID={}. Проверка данных окончена".format(self.id),
+                      extra={"task_id": self.id})
         return True
 
     def memory_param_calc(self):
@@ -121,8 +86,9 @@ class RandomizeParent(ABC):
         """
         if self.__class__.__name__ != "RandomizeForecast":
             return
-        logging.info("ID={}. Целевой параметр: {}. Вычисление порядка.".format(self.id, self.param_names[0]))
+        logging.info("ID={}. Вычисление порядка.".format(self.id))
         arg = self.target_array
+
         s_mean = np.mean(arg)
         len_s = len(arg)
         k = 0
@@ -136,28 +102,27 @@ class RandomizeParent(ABC):
                 k = i
                 break
         self.memory_param = k
-        logging.info("ID={}. Целевой параметр: {}. Порядок вычислен и равен {}".format(self.id, self.param_names[0],
-                                                                                       self.memory_param))
+        logging.info("ID={}. Порядок вычислен и равен {}".format(self.id, self.memory_param))
 
     def operation_data_preparation(self):
         """Подготовка данных с учетом параметра памяти"""
-        data =  self.operating_data.copy() if type(self.operating_data) is np.ndarray else None
         arr = self.target_array
-        n = self.operating_data.shape
 
+        data = self.operating_data.copy() if self.operating_data is not None else None
+        n = len(self.target_array)
         # составляем матрицу целевого параметра
         self.operating_data = np.array([])
 
         for i in range(0, self.memory_param):  # пропускаем текущее значение
             if self.operating_data.shape[0] == 0:
-                self.operating_data = arr[i:n[0] + i - self.memory_param].reshape(-1, 1)
+                self.operating_data = arr[i:n + i - self.memory_param].reshape(-1, 1)
             else:
                 self.operating_data = np.hstack(
-                    (self.operating_data, arr[i:n[0] + i - self.memory_param].reshape(-1, 1)))
+                    (self.operating_data, arr[i:n + i - self.memory_param].reshape(-1, 1)))
 
         # добавляем дополнительные параметры
-        if type(data) is np.ndarray:
-            for i in range(0, n[1]):
+        if data is None:
+            for i in range(0, data.shape[1]):
                 try:
                     # при добавлении пропускаем self.data[i, 0] так как он является пропуском в данных
                     self.operating_data = np.hstack((self.operating_data, data[self.memory_param:, i].reshape(-1, 1)))
@@ -166,7 +131,7 @@ class RandomizeParent(ABC):
 
         # добавляем свободное слагаемое в случае если это прогнозирование
         if self.__class__.__name__ == "RandomizeForecast":
-            self.operating_data = np.hstack((np.ones_like(data[self.memory_param:, 0].reshape(-1, 1)),
+            self.operating_data = np.hstack((np.ones_like(self.target_array[self.memory_param:].reshape(-1, 1)),
                                              self.operating_data))
         self.target_array = self.target_array[self.memory_param:]
 
@@ -178,8 +143,8 @@ class RandomizeParent(ABC):
         :return: self.operating_data - нормализованные данные,
             self.min_max - dict с минимальным и максимальным значением
         """
-        logging.info("ID={}. Целевой параметр: {}. Нормировка данных".format(self.id, self.param_names[0]),
-                     extra={"task_id": self.id, })
+        logging.info("ID={}. Нормировка данных".format(self.id),
+                     extra={"task_id": self.id})
         min_data = np.min(self.operating_data, axis=0)
         max_data = np.max(self.operating_data, axis=0)
         self.operating_data = (self.operating_data - min_data) / (max_data - min_data)
@@ -193,10 +158,6 @@ class RandomizeParent(ABC):
                             (max_data - min_data)
         self.operating_data = np.nan_to_num(self.operating_data, nan=1)
 
-        if self.__class__.__name__ == "RandomizeRecover":
-            self.data_for_restore = (self.data_for_restore - self.min_max["min"]) / \
-                                    (self.min_max["max"] - self.min_max["min"])
-
     def param_func(self, theta, p):
         """
         Множители параметров целевой функции
@@ -205,14 +166,12 @@ class RandomizeParent(ABC):
         :return: множитель параметра
         """
         hr = np.sum(np.multiply(theta, self.operating_data[:, p]))
-        logging.debug(
-            "ID={}. Целевой параметр: {}. self.operating_data[:, p] = {}".format(self.id, self.param_names[0],
-                                                                                 self.operating_data[:, p]),
-            extra={"task_id": self.id, })
-        logging.debug("ID={}. Целевой параметр: {}. theta = {}".format(self.id, self.param_names[0], theta),
-                      extra={"task_id": self.id, })
-        logging.debug("ID={}. Целевой параметр: {}. hr = {}".format(self.id, self.param_names[0], hr),
-                      extra={"task_id": self.id, })
+        logging.debug("ID={}. self.operating_data[:, p] = {}".format(self.id, self.operating_data[:, p]),
+                      extra={"task_id": self.id})
+        logging.debug("ID={}. theta = {}".format(self.id, theta),
+                      extra={"task_id": self.id})
+        logging.debug("ID={}. hr = {}".format(self.id, hr),
+                      extra={"task_id": self.id})
         return (np.exp((-self.param_limits[p][0] * hr)) * (self.param_limits[p][0] * hr + 1) -
                 np.exp((-self.param_limits[p][1] * hr)) * (self.param_limits[p][1] * hr + 1)) / \
             (hr * (np.exp(-self.param_limits[p][0] * hr) - np.exp(-self.param_limits[p][1] * hr)))
@@ -245,7 +204,8 @@ class RandomizeParent(ABC):
         f = np.ones_like(theta)
         param_vector = self.param_vector(theta)
         for i in range(0, len(theta)):
-            f[i] = np.abs((param_vector * self.operating_data[i, :]).sum() + self.param_error(theta[i]))
+            f[i] = np.abs((param_vector * self.operating_data[i, :]).sum() + self.param_error(theta[i]) -
+                          self.target_array[i])
         return f
 
     def theta_calc(self):
@@ -253,19 +213,19 @@ class RandomizeParent(ABC):
         Метод вычисления множителей Лагранжа через оптимизацию целевой функции
         :return: множителей Лагранжа
         """
-        logging.info("ID={}. Целевой параметр: {}. Вычисление множителей Лагранжа".format(self.id, self.param_names[0]))
+        logging.info("ID={}. Вычисление множителей Лагранжа".format(self.id))
         sol = optimize.root(self.func, np.ones_like(self.operating_data[:, 0]), method="lm")
         if sol.success:
             self.theta = sol.x
-            logging.info("ID={}. Целевой параметр: {}. "
-                         "Успешно окончено вычисление множителей Лагранжа".format(self.id, self.param_names[0]))
+            logging.info("ID={}. "
+                         "Успешно окончено вычисление множителей Лагранжа".format(self.id))
             logging.debug(
-                "ID={}. Целевой параметр: {}. Множители Лагранжа = {}".format(self.id, self.param_names[0], self.theta))
+                "ID={}. Множители Лагранжа = {}".format(self.id, self.theta))
             return sol.x
         else:
             logging.error(
-                "ID={}. Целевой параметр: {}. "
-                "Вычисление множителей Лагранжа окончено неудачей".format(self.id, self.param_names[0]))
+                "ID={}. "
+                "Вычисление множителей Лагранжа окончено неудачей".format(self.id))
             return None
 
     def param_limits_calc(self):
@@ -273,8 +233,8 @@ class RandomizeParent(ABC):
         Вычисление пределов множителей параметров
         :return:
         """
-        logging.info("ID={}. Целевой параметр: {}. "
-                     "Вычисление промежутков параметров".format(self.id, self.param_names[0]))
+        logging.info("ID={}. "
+                     "Вычисление промежутков параметров".format(self.id))
         # вычисляются оценки МНК
         y = self.target_array  # целевое значение
         y = y.reshape(-1, 1)  # превращаем строку в столбец
@@ -305,6 +265,7 @@ class RandomizeParent(ABC):
         for p in range(0, len(hr_vector)):
             def prv(x):
                 return np.exp(-x * hr_vector[p]) / ro_vector[p]
+
             ans[p] = generator_param(self.param_limits[p], prv)
         return ans
 
@@ -316,22 +277,26 @@ class RandomizeParent(ABC):
             q_err_k = (np.exp(-self.error_limits[0] * self.theta.mean()) -
                        np.exp(-self.error_limits[1] * self.theta.mean())) / self.theta.mean()
             return np.exp(-x * self.theta.mean()) / q_err_k
+
         return generator_param(self.error_limits, prv)
 
 
 class RandomizeForecast(RandomizeParent):
-    def __init__(self, task_id, data: np.ndarray, param_names=None, time_parameter_values=None):
+    def __init__(self, task_id, main_param: np.ndarray, secondary_param: np.ndarray):
 
-        super().__init__(task_id, data, param_names)
-        if time_parameter_values is None:
-            time_parameter_values = {"short": int(config["RANDOMIZE_CONFIG"]["randomize.short_time_period"]),
-                                     "middle": int(config["RANDOMIZE_CONFIG"]["randomize.middle_time_period"]),
-                                     "long": int(config["RANDOMIZE_CONFIG"]["randomize.long_time_period"])}
-        self.time_parameter_values = time_parameter_values
+        super().__init__(task_id, main_param, secondary_param)
+        logging.info("Создание объекта рандомизированного прогнозирования")
+        self.time_parameter_values = {"short": int(config["RANDOMIZE_CONFIG"]["randomize.short_time_period"]),
+                                      "middle": int(config["RANDOMIZE_CONFIG"]["randomize.middle_time_period"]),
+                                      "long": int(config["RANDOMIZE_CONFIG"]["randomize.long_time_period"])}
 
-    def modeling(self, n=100, period_type="short", secondary=False):
-        logging.info("ID={}. Целевой параметр: {}. "
-                     "Начато моделирование - количество итераций - {}".format(self.id, self.param_names[0], n))
+    def data_analysis(self):
+        self.operating_data = self.data
+        return super().data_analysis()
+
+    def modeling(self, n=1000, period_type="short"):
+        logging.info("ID={}. "
+                     "Начато моделирование - количество итераций - {}".format(self.id, n))
         if period_type in self.time_parameter_values.keys():
             forecast_years = self.time_parameter_values[period_type]
         else:
@@ -340,24 +305,17 @@ class RandomizeForecast(RandomizeParent):
         forecast_matrix = np.hstack((np.ones((forecast_years, 1)), forecast_matrix))
 
         # прогнозирование вспомогательных параметров
-        logging.info("ID={}. Целевой параметр: {}. "
-                     "Прогнозирование вспомогательных параметров".format(self.id, self.param_names[0]))
-        for p in range(1, self.data.shape[1]):
-            logging.info("ID={}. Целевой параметр: {}. "
-                         "Прогнозирование вспомогательного параметра {}".format(self.id, self.param_names[0],
-                                                                                self.param_names[p]))
-            param_model = RandomizeForecast(self.id, self.data[:, p].reshape(-1, 1), [self.param_names[p]])
-            param_model.learning()
-            param_values = param_model.modeling(n=n, secondary=True)
-            forecast_matrix = np.hstack((forecast_matrix, param_values[-forecast_years:].reshape(-1, 1)))
-        logging.info("ID={}. Целевой параметр: {}. "
-                     "Прогнозирование вспомогательных параметров окончено".format(self.id, self.param_names[0]))
+        logging.info("ID={}. "
+                     "Прогнозирование вспомогательных параметров".format(self.id))
+
+        logging.info("ID={}. "
+                     "Прогнозирование вспомогательных параметров окончено".format(self.id))
         # forecast_matrix - матрица, у которой слева - нули, справа - предсказанные дополнительные параметры (в
         # случае температуры и осадков - только нулевая матрица)
 
         # вычисляем параметры функции ПРВ
         hr_vector = ro_vector = np.ones(self.operating_data.shape[1])
-        for p in range(1, self.operating_data.shape[1]):
+        for p in range(0, self.operating_data.shape[1]):
             hr_vector[p] = np.sum(np.multiply(self.theta, self.operating_data[:, p]))
             ro_vector[p] = (np.exp(-self.param_limits[p][0] * hr_vector[p]) -
                             np.exp(-self.param_limits[p][1] * hr_vector[p])) / hr_vector[p]
@@ -365,15 +323,14 @@ class RandomizeForecast(RandomizeParent):
         # объединяем матрицы forecast_matrix и operating_data
         forecast_matrix = np.vstack((self.operating_data, forecast_matrix))
         work_matrix = np.zeros((forecast_matrix.shape[0], forecast_matrix.shape[1], n))
-        logging.info("ID={}. Целевой параметр: {}. "
-                     "Начато моделирование".format(self.id, self.param_names[0]))
+        logging.info("ID={}. Начато моделирование".format(self.id))
+
         # заполняем work_matrix известными значениями
         for i in range(0, n):
             work_matrix[:, :, i] = forecast_matrix
         forecasted_target_param = np.zeros((forecast_years + len(self.target_array), n))
         for step in range(0, n):
-            logging.debug("ID={}. Целевой параметр: {}. "
-                          "Моделирование - шаг {}".format(self.id, self.param_names[0], step))
+            logging.debug("ID={}. Моделирование - шаг {}".format(self.id, step))
             # заполним forecasted_target_param известными значениями
             forecasted_target_param[:len(self.target_array), step] = self.target_array
             for year in range(self.operating_data.shape[0], forecast_matrix.shape[0]):
@@ -383,43 +340,79 @@ class RandomizeForecast(RandomizeParent):
 
                 # предсказываем на шаге step значение целевого параметра
                 forecasted_target_param[year, step] = \
-                    np.sum((self.generate_random_value_with_prv(hr_vector, ro_vector)*work_matrix[year, :, step])) + \
+                    np.sum((self.generate_random_value_with_prv(hr_vector, ro_vector) * work_matrix[year, :, step])) + \
                     self.generate_random_error_prv()
 
         ans = forecasted_target_param.mean(1)
         ans = ans[-forecast_years:]
-        if not secondary:
-            ans = ans * (self.min_max["max_target"] - self.min_max["min_target"]) + self.min_max["min_target"]
-            ans = np.hstack((self.data[:, 0], ans))
-        else:
-
-            addition = (self.data[:, 0] - self.min_max["min_target"]) / \
-                       (self.min_max["max_target"] - self.min_max["min_target"])
-            ans = np.hstack((addition, ans))
+        ans = ans * (self.min_max["max_target"] - self.min_max["min_target"]) + self.min_max["min_target"]
+        ans = np.hstack((self.target_array_bk, ans))
         return ans
 
 
 class RandomizeRecover(RandomizeParent):
+
+    def normalization_data(self):
+        super().normalization_data()
+        self.data_for_restore = (self.data_for_restore - self.min_max["min"]) / \
+                                (self.min_max["max"] - self.min_max["min"])
+
+    def __init__(self, task_id, main_param: np.ndarray, secondary_param: np.ndarray):
+        self.data_for_restore = np.array([])
+        self.target_array_for_restore = np.array([])
+        super().__init__(task_id, main_param, secondary_param)
+
+    def operation_data_preparation(self):
+        self.normalization_data()
+
+    def data_analysis(self):
+        super().data_analysis()
+        old_target_array = self.target_array.copy()
+        self.target_array = np.array([])
+        self.operating_data = np.array([])
+
+        for i in range(0, len(old_target_array)):
+            if is_none(old_target_array[i]):
+
+                # Если есть пропуски в целевом параметре - номер добавляем в self.data_gaps номер
+                # и в self.data_for_restore добавляем данные
+                self.data_gaps.append(i)
+
+                try:
+                    # при добавлении пропускаем self.data[i, 0] так как он является пропуском в данных
+                    self.data_for_restore = np.vstack((self.data_for_restore, self.data[i, :]))
+                    self.target_array_for_restore = np.hstack((self.target_array_for_restore, old_target_array[i]))
+                except ValueError:
+                    self.data_for_restore = self.data[i, :]
+                    self.target_array_for_restore = old_target_array[i]
+            else:
+                try:
+                    self.operating_data = np.vstack((self.operating_data, self.data[i, :]))
+                    self.target_array = np.hstack((self.target_array, old_target_array[i]))
+                except ValueError:
+                    self.operating_data = self.data[i, :]
+                    self.target_array = old_target_array[i]
+
     def modeling(self, n=100):
-        logging.info("ID={}. Целевой параметр: {}. "
+        logging.info("ID={}. "
                      "Начато моделирование рандомизированного восстановления пропусков. "
-                     "Количество итераций - {}".format(self.id, self.param_names[0], n))
+                     "Количество итераций - {}".format(self.id, n))
 
         # вычисляем параметры функции ПРВ
         hr_vector = ro_vector = np.ones(self.operating_data.shape[1])
-        for p in range(1, self.operating_data.shape[1]):
+        for p in range(0, self.operating_data.shape[1]):
             hr_vector[p] = np.sum(np.multiply(self.theta, self.operating_data[:, p]))
             ro_vector[p] = (np.exp(-self.param_limits[p][0] * hr_vector[p]) -
                             np.exp(-self.param_limits[p][1] * hr_vector[p])) / hr_vector[p]
         recovered_target_param = np.zeros((len(self.data_gaps), n))
         for step in range(0, n):
-            logging.debug("ID={}. Целевой параметр: {}. "
-                          "Моделирование - шаг {}".format(self.id, self.param_names[0], step))
+            logging.debug("ID={}. "
+                          "Моделирование - шаг {}".format(self.id, step))
 
             for year in range(0, self.data_for_restore.shape[0]):
                 # предсказываем на шаге step значение целевого параметра
                 recovered_target_param[year, step] = \
-                    np.sum((self.generate_random_value_with_prv(hr_vector, ro_vector)*self.data_for_restore[year, :])) \
+                    np.sum((self.generate_random_value_with_prv(hr_vector, ro_vector) * self.data_for_restore[year, :])) \
                     + self.generate_random_error_prv()
 
         ans = recovered_target_param.mean(1)
@@ -431,6 +424,6 @@ class RandomizeRecover(RandomizeParent):
                 ans2.append(ans[k])
                 k += 1
             else:
-                ans2.append(self.data[i, 0])
-        logging.info("ID={}. Целевой параметр: {}. Восстановление окончено ".format(self.id, self.param_names[0]))
+                ans2.append(self.target_array_bk[i])
+        logging.info("ID={}. Восстановление окончено ".format(self.id))
         return np.array(ans2)
