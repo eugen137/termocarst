@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 LABEL name=termokarst_controller
 
-WORKDIR /action/workspace
+WORKDIR /action/workspace/controller
 COPY ./ /action/workspace/controller
 
 RUN python3 -m pip install --no-cache-dir -r /action/workspace/controller/requirements.txt \

@@ -3,7 +3,6 @@ import logging
 import os
 import sys
 from logging.handlers import RotatingFileHandler
-
 config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
 config.read('worker_configuration.ini')
 

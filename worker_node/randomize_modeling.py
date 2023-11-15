@@ -294,13 +294,9 @@ class RandomizeForecast(RandomizeParent):
         self.operating_data = self.data
         return super().data_analysis()
 
-    def modeling(self, n=1000, period_type="short"):
+    def modeling(self, n=1000, forecast_years=5):
         logging.info("ID={}. "
                      "Начато моделирование - количество итераций - {}".format(self.id, n))
-        if period_type in self.time_parameter_values.keys():
-            forecast_years = self.time_parameter_values[period_type]
-        else:
-            forecast_years = 0
         forecast_matrix = np.zeros((forecast_years, self.memory_param))
         forecast_matrix = np.hstack((np.ones((forecast_years, 1)), forecast_matrix))
 

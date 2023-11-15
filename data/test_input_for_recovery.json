@@ -1,5 +1,5 @@
 {"period_type": "short",
-  "count_of_trajectories": 50000,
+  "count_of_trajectories": 100000,
   "main_param_name": "square",
   "data": {
   "precipitation": {

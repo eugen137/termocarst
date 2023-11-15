@@ -20,8 +20,8 @@ async def worker_server():
         message = json.loads(msg.value)
         if msg.key.decode('utf-8').replace('"', '') != worker.id:
             logging.info("Задача пришла не этому воркеру "
-                         "(текущий id {}, я id сообщения {})".format(worker.id,
-                                                                     msg.key.decode('utf-8').replace('"', '')))
+                         "(текущий id {}, id сообщения {})".format(worker.id,
+                                                                   msg.key.decode('utf-8').replace('"', '')))
             continue
         else:
             logging.info("Задача назначена этому воркеру "

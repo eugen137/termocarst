@@ -12,6 +12,7 @@ log_file_name = static_config['LOGGING']['logging.file.name']
 maxBytes = int(static_config['LOGGING']['logging.maxBytes'])
 backupCount = int(static_config['LOGGING']['logging.backupCount'])
 
+
 if not os.path.exists(log_file_dir):
     os.mkdir(log_file_dir)
 
