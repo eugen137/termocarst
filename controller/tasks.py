@@ -7,6 +7,7 @@ from utils import State
 class Task:
     def __init__(self, parent_ids, main_param, second_param, main_param_name, second_param_names=None, id_=None,
                  count_of_trajectories=100):
+        self.forecast_years = None
         self.id = id_ if id_ is not None else str(uuid.uuid4())
         self.parent_ids = parent_ids if type(parent_ids) is list else [parent_ids]
         self.main_param = main_param
@@ -66,7 +67,11 @@ class Task:
             "second_param": second_param,
             "count_of_trajectories": self.count_of_trajectories,
             "type": self.__class__.__name__
+
         }
+        
+        if self.__class__.__name__ == "ForecastTask":
+            task_message["forecast_years"] = self.forecast_years
         self.state = State.running
         messages.append(task_message)
         logging.info("id={}, Сообщение сгенерировано {}".format(self.id, messages))
@@ -98,7 +103,8 @@ class ForecastTask(Task):
         if self.check_need_for_recover():
             logging.info("id={}, Для выполнения задачи нужно восстановление".format(self.id))
             recovery_task = RecoveryTask(parent_ids=parent_ids, main_param=self.main_param,
-                                         second_param=self.second_param, main_param_name=self.main_param_name)
+                                         second_param=self.second_param, main_param_name=self.main_param_name,
+                                         count_of_trajectories=self.count_of_trajectories)
             self.child_tasks.append(recovery_task)
 
         # проверим нужно ли прогнозирование второстепенных параметров
@@ -108,7 +114,9 @@ class ForecastTask(Task):
             for i in range(0, count_secondary_param):
                 second_param = self.second_param[:, i]
                 forecast_task = ForecastTask(parent_ids=parent_ids, main_param=second_param,
-                                             second_param=None, main_param_name=self.second_param_names[i])
+                                             second_param=None, main_param_name=self.second_param_names[i],
+                                             count_of_trajectories=self.count_of_trajectories,
+                                             forecast_years=self.forecast_years)
                 self.child_tasks.append(forecast_task)
         if len(self.child_tasks) != 0:
             self.state = State.wait
@@ -124,14 +132,10 @@ class ForecastTask(Task):
         if len(self.child_tasks) == 0:
             logging.info("id={}, Подзадач нет".format(self.id))
             return
-
-        # проверяем - было ли восстановление
-        print([t.__class__.__name__ for t in self.child_tasks])
         recovery_task = list(filter(lambda x: x.__class__.__name__ == "RecoveryTask", self.child_tasks))
         if len(recovery_task) != 0:
             logging.info("id={}, Было восстановление, забираем восстановленные параметры {}".format(self.id, self.id))
             # если было восстановление - то заменяем старые данные восстановленными
-            print(recovery_task[0].main_param)
             self.main_param = recovery_task[0].result
 
         if self.second_param.shape == (0,):

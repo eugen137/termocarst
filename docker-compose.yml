@@ -34,23 +34,20 @@ services:
     links:
       - kafka
       - zookeeper
-
   controller:
     build: controller
     links:
       - kafka
-      - zookeeper
+    restart: always
     depends_on:
       - kafka
-
-  worker_node1:
+  worker_node:
     build: worker_node
     links:
       - kafka
-      - zookeeper
     depends_on:
       - kafka
       - controller
     deploy:
       mode: replicated
-      replicas: 3
+      replicas: 6

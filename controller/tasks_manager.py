@@ -1,8 +1,7 @@
-
+import datetime
 import logging
 import uuid
 import numpy as np
-
 from configuration import static_config
 from tasks import RecoveryTask, ForecastTask
 from utils import State
@@ -12,7 +11,8 @@ class TaskManager:
     """
     Элемент менеджера задач
     """
-    def __init__(self,  message: dict, type_task: str, task_id=None, main_param_array=None, secondary_param_matrix=None, count_of_trajectories=None):
+    def __init__(self,  message: dict, type_task: str, task_id=None, main_param_array=None, secondary_param_matrix=None,
+                 count_of_trajectories=None):
         self.main_param_array = main_param_array
         self.secondary_param_matrix = secondary_param_matrix
         self.id = task_id
@@ -23,6 +23,7 @@ class TaskManager:
         self.type = None
         self.forecast_years = None
         self.finished = False
+        self.start_time = datetime.datetime.now()
 
         if count_of_trajectories is None:
             self.count_of_trajectories = count_of_trajectories
@@ -54,6 +55,7 @@ class TaskManager:
                     self.forecast_years = int(static_config["RANDOMIZE_CONFIG"]["randomize.middle_time_period"])
                 elif period_type == "long":
                     self.forecast_years = int(static_config["RANDOMIZE_CONFIG"]["randomize.long_time_period"])
+                logging.info("id={}. Определен период прогнозирования - {}".format(self.id, period_type))
             else:
                 self.forecast_years = 5
 
@@ -83,10 +85,6 @@ class TaskManager:
             for j in range(0, len(secondary_params)):
                 self.secondary_param_matrix[i, j] = param_data[secondary_params[j]][years[i]]
 
-    def _test_data(self):
-        # TODO: добавить тестирование
-        return True
-
     def make_task(self):
         logging.info("***********************Начато создание задач****************************")
         if self.type == "recovery":
@@ -100,7 +98,8 @@ class TaskManager:
             self.task = ForecastTask(id_=self.id, parent_ids=[self.id], main_param=self.main_param_array,
                                      second_param=self.secondary_param_matrix, main_param_name=self.main_param_name,
                                      second_param_names=self.secondary_param_names,
-                                     count_of_trajectories=self.count_of_trajectories)
+                                     count_of_trajectories=self.count_of_trajectories,
+                                     forecast_years=self.forecast_years)
             logging.info("Создана основная задача прогнозирования")
         logging.info("***********************Окончено создание задач****************************")
 

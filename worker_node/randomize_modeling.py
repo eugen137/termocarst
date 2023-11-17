@@ -2,7 +2,7 @@ import logging
 from abc import ABC
 import numpy as np
 from scipy import optimize
-
+from multiprocessing import Pool
 from config import config
 from utils import is_none, generator_param
 
@@ -251,10 +251,11 @@ class RandomizeParent(ABC):
             self.param_limits.append([a_ls[i, 0] - 3 * np.sqrt(s2 * q[i, i]), a_ls[i, 0] + 3 * np.sqrt(s2 * q[i, i])])
         self.error_limits = [- 3 * np.sqrt(s2), 3 * np.sqrt(s2)]
 
-    def generate_random_value_with_prv(self, hr_vector: np.ndarray, ro_vector: np.ndarray):
+    def generate_random_value_with_prv(self, hr_vector: np.ndarray, ro_vector: np.ndarray, rnd):
         """
         Генерирует случайное (множитель параметра) число с заданной ПРВ на рассчитанном интервале.
 
+        :param rnd:
         :param hr_vector: Поэлементное произведение theta и векторов параметров (с учетом памяти)
         :param ro_vector: Делитель для каждого параметра
         :return: случайное число с заданной ПРВ на рассчитанном интервале
@@ -266,10 +267,10 @@ class RandomizeParent(ABC):
             def prv(x):
                 return np.exp(-x * hr_vector[p]) / ro_vector[p]
 
-            ans[p] = generator_param(self.param_limits[p], prv)
+            ans[p] = generator_param(self.param_limits[p], prv, rnd)
         return ans
 
-    def generate_random_error_prv(self):
+    def generate_random_error_prv(self, rnd):
         if self.theta is None:
             return None
 
@@ -278,7 +279,7 @@ class RandomizeParent(ABC):
                        np.exp(-self.error_limits[1] * self.theta.mean())) / self.theta.mean()
             return np.exp(-x * self.theta.mean()) / q_err_k
 
-        return generator_param(self.error_limits, prv)
+        return generator_param(self.error_limits, prv, rnd)
 
 
 class RandomizeForecast(RandomizeParent):
@@ -294,13 +295,9 @@ class RandomizeForecast(RandomizeParent):
         self.operating_data = self.data
         return super().data_analysis()
 
-    def modeling(self, n=1000, period_type="short"):
+    def modeling(self, n=1000, forecast_years=5):
         logging.info("ID={}. "
                      "Начато моделирование - количество итераций - {}".format(self.id, n))
-        if period_type in self.time_parameter_values.keys():
-            forecast_years = self.time_parameter_values[period_type]
-        else:
-            forecast_years = 0
         forecast_matrix = np.zeros((forecast_years, self.memory_param))
         forecast_matrix = np.hstack((np.ones((forecast_years, 1)), forecast_matrix))
 
@@ -348,6 +345,83 @@ class RandomizeForecast(RandomizeParent):
         ans = ans * (self.min_max["max_target"] - self.min_max["min_target"]) + self.min_max["min_target"]
         ans = np.hstack((self.target_array_bk, ans))
         return ans
+
+    def modeling_mult(self, n=1000, forecast_years=5):
+        logging.info("ID={}. "
+                     "Начато моделирование - количество итераций - {}".format(self.id, n))
+        forecast_matrix = np.zeros((forecast_years, self.memory_param))
+        forecast_matrix = np.hstack((np.ones((forecast_years, 1)), forecast_matrix))
+
+        # прогнозирование вспомогательных параметров
+        logging.info("ID={}. "
+                     "Прогнозирование вспомогательных параметров".format(self.id))
+
+        logging.info("ID={}. "
+                     "Прогнозирование вспомогательных параметров окончено".format(self.id))
+        # forecast_matrix - матрица, у которой слева - нули, справа - предсказанные дополнительные параметры (в
+        # случае температуры и осадков - только нулевая матрица)
+
+        # вычисляем параметры функции ПРВ
+        hr_vector = ro_vector = np.ones(self.operating_data.shape[1])
+        for p in range(0, self.operating_data.shape[1]):
+            hr_vector[p] = np.sum(np.multiply(self.theta, self.operating_data[:, p]))
+            ro_vector[p] = (np.exp(-self.param_limits[p][0] * hr_vector[p]) -
+                            np.exp(-self.param_limits[p][1] * hr_vector[p])) / hr_vector[p]
+
+        # объединяем матрицы forecast_matrix и operating_data
+        forecast_matrix = np.vstack((self.operating_data, forecast_matrix))
+        logging.info("ID={}. Начато моделирование".format(self.id))
+
+        # заполняем work_matrix известными значениями
+        work_matrix = forecast_matrix
+        forecasted_target_param = np.zeros((forecast_years + len(self.target_array)))
+        forecasted_target_param[:len(self.target_array)] = self.target_array
+        res = [forecasted_target_param, forecast_matrix, work_matrix, hr_vector, ro_vector]
+        process_count = 8
+        arg = []
+        for i in range(0, n, process_count):
+
+            for j in range(0, process_count):
+                r = res.copy()
+                r.append(np.random.default_rng(np.random.randint(10, n*100)))
+                arg.append(r)
+        ans_param = np.zeros_like(forecasted_target_param)
+        with Pool(process_count) as p:
+            pool_param = sum(p.map(self.m_func, arg, chunksize=2)) / n
+        ans_param += pool_param
+        # for step in range(0, n):
+        #     logging.debug("ID={}. Моделирование - шаг {}".format(self.id, step))
+        #     # заполним forecasted_target_param известными значениями
+        #     f = self.m_func(forecasted_target_param=forecasted_target_param, forecast_matrix=forecast_matrix,
+        #                     work_matrix=work_matrix, step=step, hr_vector=hr_vector, ro_vector=ro_vector)
+        #     print(f)
+        #     ans_param += f
+
+        ans = ans_param
+        ans = ans[-forecast_years:]
+        ans = ans * (self.min_max["max_target"] - self.min_max["min_target"]) + self.min_max["min_target"]
+        ans = np.hstack((self.target_array_bk, ans))
+        return ans
+
+    def m_func(self, res):
+        forecasted_target_param = res[0]
+        forecast_matrix = res[1]
+        work_matrix = res[2]
+        hr_vector = res[3]
+        ro_vector = res[4]
+
+        # заполним forecasted_target_param известными значениями
+        for year in range(self.operating_data.shape[0], forecast_matrix.shape[0]):
+
+            # формируем строку с данными памяти
+            for j in range(1, self.memory_param + 1):
+                work_matrix[year, j] = forecasted_target_param[year - j]
+
+            # предсказываем на шаге step значение целевого параметра
+            forecasted_target_param[year] = \
+                np.sum((self.generate_random_value_with_prv(hr_vector, ro_vector, res[5]) * work_matrix[year, :])) + \
+                self.generate_random_error_prv(res[5])
+        return forecasted_target_param
 
 
 class RandomizeRecover(RandomizeParent):
@@ -412,8 +486,8 @@ class RandomizeRecover(RandomizeParent):
             for year in range(0, self.data_for_restore.shape[0]):
                 # предсказываем на шаге step значение целевого параметра
                 recovered_target_param[year, step] = \
-                    np.sum((self.generate_random_value_with_prv(hr_vector, ro_vector) * self.data_for_restore[year, :])) \
-                    + self.generate_random_error_prv()
+                    np.sum((self.generate_random_value_with_prv(hr_vector, ro_vector) *
+                            self.data_for_restore[year, :])) + self.generate_random_error_prv()
 
         ans = recovered_target_param.mean(1)
         ans = ans * (self.min_max["max_target"] - self.min_max["min_target"]) + self.min_max["min_target"]
