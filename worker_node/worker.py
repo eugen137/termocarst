@@ -43,7 +43,7 @@ class Worker:
         rand_model = rand_type(self.ids_path[0], self.main_param, self.secondary_matrix)
         rand_model.learning()
         if rand_type == RandomizeForecast:
-            result = rand_model.modeling(n=self.count_of_trajectories, forecast_years=self.forecast_years)
+            result = rand_model.modeling_mult(n=self.count_of_trajectories, forecast_years=self.forecast_years)
         else:
             result = rand_model.modeling(n=self.count_of_trajectories)
         self.state = 'free'

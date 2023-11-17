@@ -38,6 +38,7 @@ services:
     build: controller
     links:
       - kafka
+    restart: always
     depends_on:
       - kafka
   worker_node:

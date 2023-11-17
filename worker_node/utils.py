@@ -29,13 +29,11 @@ def generator(edges, prv, lh_r):
     return x1_
 
 
-def generator_param(edges, prv):
-
+def generator_param(edges, prv, rnd):
     max_value_prv = max(prv(edges[0]), prv(edges[1]))
-
     while True:
-        x1 = edges[0] + np.random.uniform(0, 1) * (edges[1] - edges[0])
-        x2 = np.random.uniform(0, 1)
+        x1 = edges[0] + rnd.uniform(0, 1) * (edges[1] - edges[0])
+        x2 = rnd.uniform(0, 1)
         if x2 <= prv(x1) / max_value_prv:
             break
     return x1
