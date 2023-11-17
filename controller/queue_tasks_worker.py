@@ -73,23 +73,34 @@ class Queue:
         self.workers[worker.id] = worker
         await self.distribution_of_messages()
 
-    async def receive_result_of_workers(self, result):
+    async def receive_result_of_workers(self, result, failed=False):
         # получим id задачи
         id_ = result["parent_ids"].pop(0)
         logging.info("Для задачи {} получен результат работы {}".format(id_, result))
-        self.task_managers[id_].receive_message(result)
-        answer = self.task_managers[id_].make_message()
-        if self.task_managers[id_].finished:
-            logging.info("!!!!!!!!!!!!!!Работа по задаче {} завершена. "
-                         "Время на выполнение задачи {}!!!!!!!!!!!!!!!!!!!!!".format(id_, datetime.datetime.now() -
-                                                                                     self.task_managers[
-                                                                                         id_].start_time))
+        if failed:
+            logging.info("Задача {} закончена со статусом {}".format(id_, result["state"]))
+            answer = {"id": id_,
+                      "result": "Ошибка {}".format(result["error"])}
             t = self.task_managers[id_].type
             topic = "RecoveryAnswer" if t == "recovery" else "ForecastAnswer"
-            await send_answer(answer, "answer", topic)
+            return await send_answer(answer, "answer", topic)
+            pass
         else:
-            # если задача не выполнена, то задача продолжается, добавляем в очередь вычисления
-            await self.add_task_message(answer)
+            self.task_managers[id_].receive_message(result)
+            answer = self.task_managers[id_].make_message()
+            if not answer:
+                return
+            if self.task_managers[id_].finished:
+                logging.info("!!!!!!!!!!!!!!Работа по задаче {} завершена. "
+                             "Время на выполнение задачи {}!!!!!!!!!!!!!!!!!!!!!".format(id_, datetime.datetime.now() -
+                                                                                         self.task_managers[
+                                                                                             id_].start_time))
+                t = self.task_managers[id_].type
+                topic = "RecoveryAnswer" if t == "recovery" else "ForecastAnswer"
+                await send_answer(answer, "answer", topic)
+            else:
+                # если задача не выполнена, то задача продолжается, добавляем в очередь вычисления
+                await self.add_task_message(answer)
 
     async def add_worker_message(self, worker_id, message):
         logging.info("От воркера {} пришло сообщение {}".format(worker_id, message))
@@ -98,10 +109,14 @@ class Queue:
             if self.workers[worker_id].state == WorkerState.busy:
                 logging.info("Воркер был занят, ожидаем результат")
                 # значит воркер был занят
-                self.workers[worker_id].state = WorkerState.free
+
                 if message["state"] == WorkerState.free.name:
                     # если он стал свободен, значит закончил вычисления
+                    self.workers[worker_id].state = WorkerState.free
                     await self.receive_result_of_workers(message)
+                if message["state"] == WorkerState.failed.name:
+                    # если он стал свободен, значит закончил вычисления
+                    await self.receive_result_of_workers(message, failed=True)
             else:
                 # значит воркер не был занят, меняем статус TODO: сделать другие статусы
                 self.workers[worker_id].state = WorkerState.busy

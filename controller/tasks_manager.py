@@ -23,6 +23,7 @@ class TaskManager:
         self.type = None
         self.forecast_years = None
         self.finished = False
+        self.failed = False
         self.start_time = datetime.datetime.now()
 
         if count_of_trajectories is None:
@@ -104,11 +105,15 @@ class TaskManager:
         logging.info("***********************Окончено создание задач****************************")
 
     def receive_message(self, message: dict):
+        if self.failed:
+            return
         logging.info("Пришло сообщение в таск менеджер")
         message["parent_ids"].pop(0)
         self.task.receive_message(message)
 
     def make_message(self):
+        if self.failed:
+            return False
         message = self.task.make_message()
         if self.task.state == State.finished:
             self.finished = True

@@ -40,7 +40,7 @@ class RandomizeParent(ABC):
     def learning(self):
         logging.info("Запуск обучения")
         # обучение модели (вычисление theta)
-        self.theta_calc()
+        return self.theta_calc()
 
     def data_analysis(self):
         """
@@ -221,12 +221,12 @@ class RandomizeParent(ABC):
                          "Успешно окончено вычисление множителей Лагранжа".format(self.id))
             logging.debug(
                 "ID={}. Множители Лагранжа = {}".format(self.id, self.theta))
-            return sol.x
+            return True
         else:
             logging.error(
                 "ID={}. "
                 "Вычисление множителей Лагранжа окончено неудачей".format(self.id))
-            return None
+            return False
 
     def param_limits_calc(self):
         """
@@ -471,7 +471,7 @@ class RandomizeRecover(RandomizeParent):
         logging.info("ID={}. "
                      "Начато моделирование рандомизированного восстановления пропусков. "
                      "Количество итераций - {}".format(self.id, n))
-
+        rnd = np.random.default_rng()
         # вычисляем параметры функции ПРВ
         hr_vector = ro_vector = np.ones(self.operating_data.shape[1])
         for p in range(0, self.operating_data.shape[1]):
@@ -486,8 +486,8 @@ class RandomizeRecover(RandomizeParent):
             for year in range(0, self.data_for_restore.shape[0]):
                 # предсказываем на шаге step значение целевого параметра
                 recovered_target_param[year, step] = \
-                    np.sum((self.generate_random_value_with_prv(hr_vector, ro_vector) *
-                            self.data_for_restore[year, :])) + self.generate_random_error_prv()
+                    np.sum((self.generate_random_value_with_prv(hr_vector, ro_vector, rnd) *
+                            self.data_for_restore[year, :])) + self.generate_random_error_prv(rnd)
 
         ans = recovered_target_param.mean(1)
         ans = ans * (self.min_max["max_target"] - self.min_max["min_target"]) + self.min_max["min_target"]

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 
 from aiokafka import AIOKafkaConsumer
 from config import config
@@ -12,7 +13,8 @@ async def worker_server():
     worker_consumer = AIOKafkaConsumer('CurrentTasks',
                                        bootstrap_servers=[config['KAFKA']['bootstrap_server']])
     await worker_consumer.start()
-    worker = Worker()
+    id_ = os.environ['HOSTNAME']
+    worker = Worker(id_)
     await worker.send_first_message()
     async for msg in worker_consumer:
         logging.info("Мой ИД {}".format(worker.id))
