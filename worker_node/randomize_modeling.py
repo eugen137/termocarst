@@ -1,4 +1,5 @@
 import logging
+import os
 from abc import ABC
 import numpy as np
 from scipy import optimize
@@ -213,8 +214,13 @@ class RandomizeParent(ABC):
         Метод вычисления множителей Лагранжа через оптимизацию целевой функции
         :return: множителей Лагранжа
         """
-        logging.info("ID={}. Вычисление множителей Лагранжа".format(self.id))
-        sol = optimize.root(self.func, np.ones_like(self.operating_data[:, 0]), method="lm")
+        tol = 1e-12
+        logging.info("ID={}. Вычисление множителей Лагранжа, tol={}".format(self.id, tol))
+        sol = optimize.root(self.func, np.ones_like(self.operating_data[:, 0]), method="hybr", tol=tol)
+        if not sol.success:
+            sol = optimize.root(self.func, np.ones_like(self.operating_data[:, 0]), method="lm", tol=tol)
+        if not sol.success:
+            sol = optimize.root(self.func, np.ones_like(self.operating_data[:, 0]), method="broyden1", tol=tol)
         if sol.success:
             self.theta = sol.x
             logging.info("ID={}. "
@@ -223,6 +229,7 @@ class RandomizeParent(ABC):
                 "ID={}. Множители Лагранжа = {}".format(self.id, self.theta))
             return True
         else:
+
             logging.error(
                 "ID={}. "
                 "Вычисление множителей Лагранжа окончено неудачей".format(self.id))
@@ -377,7 +384,7 @@ class RandomizeForecast(RandomizeParent):
         forecasted_target_param = np.zeros((forecast_years + len(self.target_array)))
         forecasted_target_param[:len(self.target_array)] = self.target_array
         res = [forecasted_target_param, forecast_matrix, work_matrix, hr_vector, ro_vector]
-        process_count = 8
+        process_count = os.cpu_count()
         arg = []
         for i in range(0, n, process_count):
 
