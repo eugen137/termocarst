@@ -1,6 +1,6 @@
 {"id": "df4b69da-fd0a-4ba5-aa4e-51d886c8d4f7",
   "period_type": "short",
-  "count_of_trajectories": 10000,
+  "count_of_trajectories": 100000,
   "main_param_name": "square",
   "data": {
   "precipitation": {

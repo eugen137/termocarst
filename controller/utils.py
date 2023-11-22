@@ -13,6 +13,8 @@ class State(enum.Enum):
     finished = 2
     wait = 3
     failed = 4
+    learning = 5
+    sampling = 6
 
 
 class WorkerState(enum.Enum):
@@ -29,7 +31,7 @@ async def send_to_current_task(mess, key):
     try:
         val = bytes(json.dumps(mess, indent=4), 'UTF-8')
         key = bytes(key, 'UTF-8')
-        logging.info("Конвертация сообщения в байт-строку {}".format(val))
+        logging.info("Конвертация сообщения в байт-строку")
         logging.info("Отправка сообщения в топик {}".format(topic))
         await producer.send_and_wait(topic=topic, value=val, key=key)
         logging.info("Задача отправлена")

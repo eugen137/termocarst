@@ -11,6 +11,6 @@ class Worker:
         logging.info("Создан воркер {} ".format(self.id))
 
     async def start_work(self):
-        logging.info("Воркер {} запустился с задачей {}".format(self.id, self.task_message))
+        logging.info("Воркер {} запустился с задачей".format(self.id))
         self.state = WorkerState.busy
         await send_to_current_task(self.task_message, self.id)
