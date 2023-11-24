@@ -62,7 +62,8 @@ class Task:
             return self.receive_result(message["result"])
         # значит пришло не нам, а моим дочерним задачам
         child_task_id = message["parent_ids"].pop(0)
-        logging.info("id={}, Пришло сообщение для дочерней задачи {}, путь {}".format(self.id, child_task_id, message["parent_ids"]))
+        logging.info("id={}, Пришло сообщение для дочерней задачи {}, путь {}".format(self.id, child_task_id,
+                                                                                      message["parent_ids"]))
         # проверяем пришло ли нашим детям сообщение
         for task in self.child_tasks:
             if child_task_id == task.id:
@@ -140,7 +141,8 @@ class ForecastTask(Task):
 
         # проверим нужно ли прогнозирование второстепенных параметров
         if self.second_param is not None:
-            logging.info("id={}, Для задачи {} нужно прогнозирование второстепенных параметров".format(self.id, self.id))
+            logging.info("id={}, Для задачи {} нужно прогнозирование второстепенных "
+                         "параметров".format(self.id, self.id))
             count_secondary_param = self.second_param.shape[1]
             for i in range(0, count_secondary_param):
                 second_param = self.second_param[:, i]
@@ -173,7 +175,8 @@ class ForecastTask(Task):
             logging.info("id={}, Второстепенных параметров в задаче нет".format(self.id))
             return
         if self.step == "learning":
-            forecasted_second_param = np.zeros((self.second_param.shape[0]+self.forecast_years, self.second_param.shape[1]))
+            forecasted_second_param = np.zeros((self.second_param.shape[0]+self.forecast_years,
+                                                self.second_param.shape[1]))
 
             forecast_tasks = list(filter(lambda x: x.__class__.__name__ == "ForecastTask", self.child_tasks))
             logging.info("id={}, Количество задач прогнозирования {}".format(self.id, len(forecast_tasks)))
@@ -206,7 +209,8 @@ class ForecastTask(Task):
     #                 self.main_param = self.result
 
     def make_message(self):
-        logging.info(f"id={self.id}, Запущена генерация сообщения задачи прогнозирования {self.id}, state={self.state}, "
+        logging.info(f"id={self.id}, Запущена генерация сообщения задачи прогнозирования {self.id}, "
+                     f"state={self.state}, "
                      f"step={self.step}")
         messages = []
         if self.state == State.running or self.state == State.finished or self.result is not None:

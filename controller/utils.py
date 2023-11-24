@@ -1,9 +1,8 @@
 import enum
 import json
 import logging
-
+import numpy as np
 from aiokafka import AIOKafkaProducer
-
 from configuration import static_config
 
 
@@ -17,12 +16,6 @@ class State(enum.Enum):
     sampling = 6
 
 
-class WorkerState(enum.Enum):
-    busy = 0
-    free = 1
-    failed = 2
-
-
 async def send_to_current_task(mess, key):
     topic = "CurrentTasks"
     producer = AIOKafkaProducer(
@@ -33,7 +26,9 @@ async def send_to_current_task(mess, key):
         key = bytes(key, 'UTF-8')
         logging.info("Конвертация сообщения в байт-строку")
         logging.info("Отправка сообщения в топик {}".format(topic))
-        await producer.send_and_wait(topic=topic, value=val, key=key)
+        p = list(await producer.partitions_for("CurrentTasks"))
+        await producer.send_and_wait(topic=topic, value=val, key=key, partition=np.random.choice(p))
+
         logging.info("Задача отправлена")
     except TypeError:
         logging.info("Неудача с отправлением сообщения message {} key {} в топик {}".format(mess, key, topic))

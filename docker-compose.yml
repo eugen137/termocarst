@@ -51,3 +51,21 @@ services:
     deploy:
       mode: replicated
       replicas: 6
+
+  web:
+    build: web
+    links:
+      - kafka
+    restart: always
+    ports:
+      - '8080:8080'
+    depends_on:
+      - kafka
+
+  sender_answer:
+    build: sender_answer
+    links:
+      - kafka
+    restart: always
+    depends_on:
+      - kafka

@@ -73,9 +73,9 @@ async def send_message(topic, mess, key):
     producer = AIOKafkaProducer(
         bootstrap_servers=config['KAFKA']['bootstrap_server'])
     await producer.start()
+    val = bytes(str(mess).replace("'", '"'), 'UTF-8')
+    key = bytes(json.dumps(key.replace("'", '"'), indent=4), 'UTF-8')
     try:
-        val = bytes(str(mess).replace("'", '"'), 'UTF-8')
-        key = bytes(json.dumps(key.replace("'", '"'), indent=4), 'UTF-8')
         logging.info("Конвертация сообщения в байт-строку {}".format(val))
         logging.info("Отправка сообщения в топик {}".format(topic))
         await producer.send_and_wait(topic=topic, value=val, key=key)

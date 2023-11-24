@@ -9,32 +9,34 @@ from utils import send_answer
 from worker import Worker
 
 
-async def worker_server():
-    worker_consumer = AIOKafkaConsumer('CurrentTasks',
-                                       bootstrap_servers=[config['KAFKA']['bootstrap_server']])
+async def worker_server(worker_id):
+    worker_consumer = AIOKafkaConsumer('CurrentTasks', group_id="Worker_nodes",
+                                       bootstrap_servers=[config['KAFKA']['bootstrap_server']],
+                                       enable_auto_commit=True,
+                                       )
     await worker_consumer.start()
-    id_ = os.environ['HOSTNAME']
-    worker = Worker(id_)
+    worker = Worker(worker_id)
     await worker.send_first_message()
     async for msg in worker_consumer:
         logging.info("Мой ИД {}".format(worker.id))
         logging.info("Получено новое сообщение, топик {}".format(msg.topic))
         message = json.loads(msg.value)
-        if msg.key.decode('utf-8').replace('"', '') != worker.id:
-            logging.info("Задача пришла не этому воркеру "
-                         "(текущий id {}, id в сообщения {})".format(worker.id,
-                                                                   msg.key.decode('utf-8').replace('"', '')))
-            continue
-        else:
-            logging.info("Задача назначена этому воркеру "
-                         "(текущий id {}, id в сообщения {})".format(worker.id,
-                                                                     msg.key.decode('utf-8').replace('"', '')))
+        # if msg.key.decode('utf-8').replace('"', '') != worker.id:
+        #     logging.info("Задача пришла не этому воркеру "
+        #                  "(текущий id {}, id в сообщения {})".format(worker.id,
+        #                                                            msg.key.decode('utf-8').replace('"', '')))
+        #     continue
+        # else:
+        logging.info("Задача назначена этому воркеру "
+                     "(текущий id {}, id в сообщения {})".format(worker.id,
+                                                                 msg.key.decode('utf-8').replace('"', '')))
         worker.import_from_message(message)
         ans = worker.calc()
-        id_ = worker.id
+        worker_id = worker.id
         worker = Worker()
-        worker.id = id_
-        await send_answer(ans, id_)
+        worker.id = worker_id
+        await send_answer(ans, worker_id)
 
-
-asyncio.run(worker_server())
+if __name__ == "__main__":
+    id_ = os.environ['HOSTNAME']
+    asyncio.run(worker_server(id_))

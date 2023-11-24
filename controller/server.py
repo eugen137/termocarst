@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-
 from aiokafka import AIOKafkaConsumer
 from configuration import static_config
 from queue_tasks_worker import Queue
@@ -9,7 +8,7 @@ from queue_tasks_worker import Queue
 
 async def master_manager():
     master_manager_consumer = AIOKafkaConsumer(
-        'RecoveryRequest', 'ForecastRequest', 'Workers',
+        'RecoveryRequest', 'ForecastRequest', 'Workers', group_id="Controller",
         bootstrap_servers=[static_config['KAFKA']['bootstrap_server']]
     )
     await master_manager_consumer.start()
