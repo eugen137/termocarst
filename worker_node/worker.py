@@ -13,6 +13,8 @@ class Worker:
     ids_path = []
     type = "ForecastTask"
     state = 'free'
+    step = 'learning'
+    theta = []
 
     def __init__(self, id_=None):
         self.count_of_trajectories = None
@@ -27,30 +29,40 @@ class Worker:
         self.main_param = np.array(message['main_param'])
         self.secondary_matrix = np.array(message['second_param']) if 'second_param' in message.keys() else None
         self.type = message["type"]
+        self.step = message["step"]
         self.ids_path = message["ids_path"]
-        self.count_of_trajectories = message["count_of_trajectories"]
-        self.forecast_years = message["forecast_years"] if 'forecast_years' in message.keys() else None
+        if self.step == "sampling":
+            self.count_of_trajectories = message["count_of_trajectories"]
+            self.forecast_years = message["forecast_years"] if 'forecast_years' in message.keys() else None
+            self.theta = np.array(message["theta"])
+            print(self.theta)
         logging.info("Импорт данных из сообщения закончен")
-        logging.info("Параметры задачи: main_param={}, type={}, "
-                     "forecast_years={}, "
-                     "count_of_trajectories={}".format(self.main_param, self.type,
-                                                       self.forecast_years, self.count_of_trajectories))
+        logging.info(f"Параметры задачи: main_param={self.main_param}, type={self.type}, step={self.step} "
+                     f"forecast_years={self.forecast_years}, "
+                     f"count_of_trajectories={self.count_of_trajectories}")
 
     def calc(self):
         logging.info("Начало вычислений")
         self.state = 'busy'
         rand_type = RandomizeForecast if self.type == "ForecastTask" else RandomizeRecover
         rand_model = rand_type(self.ids_path[0], self.main_param, self.secondary_matrix)
-        learning_status = rand_model.learning()
-        if learning_status:
+        ans = {"parent_ids": self.ids_path, "step": self.step}
+        if self.step == "learning":
+            learning_status = rand_model.learning()
+            self.state = 'free'
+            if learning_status:
+                ans["result"] = list(rand_model.theta)
+            else:
+                self.state = 'failed'
+                ans["result"] = list()
+                ans["error"] = "Не удалось вычислить множители Лагранжа",
+        else:
+            rand_model.theta = self.theta
             if rand_type == RandomizeForecast:
                 result = rand_model.modeling_mult(n=self.count_of_trajectories, forecast_years=self.forecast_years)
             else:
                 result = rand_model.modeling(n=self.count_of_trajectories)
             self.state = 'free'
-            ans = {"parent_ids": self.ids_path, "result": list(result), "state": "free"}
-        else:
-            self.state = 'failed'
-            ans = {"parent_ids": self.ids_path, "result": list(), "error": "Не удалось вычислить множители Лагранжа",
-                   "state": "failed"}
+            ans["result"] = list(result)
+        ans["state"] = self.state
         return ans

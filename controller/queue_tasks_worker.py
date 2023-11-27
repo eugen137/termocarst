@@ -3,13 +3,11 @@ import logging
 import uuid
 import jsonschema
 from jsonschema import validate
-from manager_worker import Worker
 from tasks_manager import TaskManager
-from utils import WorkerState, send_answer
+from utils import send_answer, send_to_current_task
 
 
 class Queue:
-    workers = dict()
     messages_for_workers = []
     task_managers = dict()
     message_schema = {
@@ -68,15 +66,10 @@ class Queue:
         self.messages_for_workers.extend(message)
         await self.distribution_of_messages()
 
-    async def add_worker(self, worker: Worker):
-        logging.info("Добавлен в очередь воркер {}".format(worker.id))
-        self.workers[worker.id] = worker
-        await self.distribution_of_messages()
-
     async def receive_result_of_workers(self, result, failed=False):
         # получим id задачи
         id_ = result["parent_ids"].pop(0)
-        logging.info("Для задачи {} получен результат работы {}".format(id_, result))
+        logging.info("Для задачи {} получен результат работы".format(id_))
         if failed:
             logging.info("Задача {} закончена со статусом {}".format(id_, result["state"]))
             answer = {"id": id_,
@@ -84,11 +77,11 @@ class Queue:
             t = self.task_managers[id_].type
             topic = "RecoveryAnswer" if t == "recovery" else "ForecastAnswer"
             return await send_answer(answer, "answer", topic)
-            pass
         else:
             self.task_managers[id_].receive_message(result)
             answer = self.task_managers[id_].make_message()
-            if not answer:
+            if not answer and len(self.messages_for_workers) > 0:
+                await self.distribution_of_messages()
                 return
             if self.task_managers[id_].finished:
                 logging.info("!!!!!!!!!!!!!!Работа по задаче {} завершена. "
@@ -103,44 +96,16 @@ class Queue:
                 await self.add_task_message(answer)
 
     async def add_worker_message(self, worker_id, message):
-        logging.info("От воркера {} пришло сообщение {}".format(worker_id, message))
-        if worker_id in self.workers.keys():
-            # нужно проверить были ли задачи у воркера
-            if self.workers[worker_id].state == WorkerState.busy:
-                logging.info("Воркер был занят, ожидаем результат")
-                # значит воркер был занят
-
-                if message["state"] == WorkerState.free.name:
-                    # если он стал свободен, значит закончил вычисления
-                    self.workers[worker_id].state = WorkerState.free
-                    await self.receive_result_of_workers(message)
-                if message["state"] == WorkerState.failed.name:
-                    # если он стал свободен, значит закончил вычисления
-                    await self.receive_result_of_workers(message, failed=True)
-            else:
-                # значит воркер не был занят, меняем статус TODO: сделать другие статусы
-                self.workers[worker_id].state = WorkerState.busy
-
-        else:
-            await self.add_worker(Worker(worker_id))
+        logging.info("От воркера {} пришло сообщение".format(worker_id))
+        await self.receive_result_of_workers(message)
 
     async def distribution_of_messages(self):
         logging.info("Запущено распределение задача по воркерам")
-        # нужно найти свободных воркеров
-        free_workers = []
-        for worker in self.workers.values():
-            if worker.state == WorkerState.free:
-                logging.info("Воркер {} свободен".format(worker.id))
-                free_workers.append(worker.id)
         logging.info("Количество задач для воркеров {}".format(len(self.messages_for_workers)))
-        for worker in free_workers:
-            if len(self.messages_for_workers) == 0:
-                break
-
+        # TODO сделать асинхронное распределение задач
+        for i in range(0, len(self.messages_for_workers)):
             message = self.messages_for_workers.pop(0)
-            self.workers[worker].task_message = message
-            logging.info("Задача {} назначена воркеру {}".format(message["ids_path"], worker))
-            await self.workers[worker].start_work()
+            await send_to_current_task(message, message["ids_path"][0])
 
     async def test_message(self, message):
         # проверка наличия данных

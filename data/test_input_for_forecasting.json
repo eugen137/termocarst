@@ -1,7 +1,7 @@
-  {"id": "add4dd32-3f4d-4ce9-b06c-d18004e9c85a",
+  {"id": "a56fae76-de48-41d6-8b73-5c29d44d3d49",
     "period_type": "short",
     "main_param_name": "square",
-    "count_of_trajectories": 1000000,
+    "count_of_trajectories": 500000,
     "data": {
     "precipitation": {
       "1985": 271,

@@ -120,7 +120,7 @@ class TaskManager:
             second_param = self.task.second_param.tolist() if type(self.task.second_param) is np.ndarray else None
             message = {"id": self.id,
                        "main_param_name": self.main_param_name,
-                       "result": self.task.result,
+                       "result": list(self.task.result),
                        "secondary_param_names": self.task.second_param_names,
                        "secondary_param": second_param
                        }

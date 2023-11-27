@@ -18,6 +18,10 @@ class Task:
         self.result = None
         self.child_tasks = []
         self.count_of_trajectories = count_of_trajectories
+        self.theta = []
+        self.step = "learning"
+        self.passed_count_of_trajectories = 0
+        self.count_of_trajectories_for_one = 5000
         logging.info("Создана задача с типом {}, главный параметр {}".format(self.__class__.__name__, main_param_name))
 
     def all_children_is_finished(self):
@@ -31,9 +35,23 @@ class Task:
         return finished
 
     def receive_result(self, result):
-        logging.info("id={}, Получен результат работы задачи {}. Результат - {}".format(self.id, self.id, result))
-        self.result = result
-        self.state = State.finished
+        logging.info("id={}, Получен результат работы задачи {}, шаг {}.".format(self.id, self.id, self.step))
+        if self.step == "learning":
+            self.theta = result
+            self.step = "sampling"
+            self.state = State.sampling
+        else:
+            logging.info(f"Количество проведенный семплированний {self.passed_count_of_trajectories}, "
+                         f"количество {self.count_of_trajectories}")
+            self.passed_count_of_trajectories += self.count_of_trajectories_for_one
+            if type(self.result) == np.ndarray:
+                self.result += np.array(result)
+                self.result = self.result / 2
+            else:
+                self.result = np.array(result)
+            if self.passed_count_of_trajectories >= self.count_of_trajectories:
+                self.state = State.finished
+                self.main_param = self.result
 
     def receive_message(self, message: dict):
         logging.info("id={}, Пришло сообщение в таск".format(self.id))
@@ -44,7 +62,8 @@ class Task:
             return self.receive_result(message["result"])
         # значит пришло не нам, а моим дочерним задачам
         child_task_id = message["parent_ids"].pop(0)
-        logging.info("id={}, Пришло сообщение для дочерней задачи {}, путь {}".format(self.id, child_task_id, message["parent_ids"]))
+        logging.info("id={}, Пришло сообщение для дочерней задачи {}, путь {}".format(self.id, child_task_id,
+                                                                                      message["parent_ids"]))
         # проверяем пришло ли нашим детям сообщение
         for task in self.child_tasks:
             if child_task_id == task.id:
@@ -58,6 +77,7 @@ class Task:
         if self.state == State.running or self.state == State.finished or self.result is not None:
             logging.info("id={}, Задача {} в процессе выполнения, сообщение не готово".format(self.id, self.id))
             return messages
+
         parent_ids = self.parent_ids.copy()
         parent_ids.append(self.id)
         second_param = self.second_param.tolist() if type(self.second_param) is np.ndarray else None
@@ -65,15 +85,27 @@ class Task:
             "ids_path": parent_ids,
             "main_param": list(self.main_param),
             "second_param": second_param,
-            "count_of_trajectories": self.count_of_trajectories,
+            "step": self.step,
             "type": self.__class__.__name__
 
         }
-        
-        if self.__class__.__name__ == "ForecastTask":
-            task_message["forecast_years"] = self.forecast_years
-        self.state = State.running
         messages.append(task_message)
+
+        if self.state == State.sampling:
+            # проверяем все ли просчитали
+
+            task_message["count_of_trajectories"] = self.count_of_trajectories_for_one
+            task_message["theta"] = self.theta
+            if self.__class__.__name__ == "ForecastTask":
+                task_message["forecast_years"] = self.forecast_years
+            n = int(self.count_of_trajectories / self.count_of_trajectories_for_one)
+            messages = [task_message.copy() for i in range(0, n)]
+
+            if self.count_of_trajectories - self.count_of_trajectories_for_one * n != 0:
+                task_message["count_of_trajectories"] = self.count_of_trajectories - self.count_of_trajectories_for_one
+                messages.append(task_message)
+
+        self.state = State.running
         logging.info("id={}, Сообщение сгенерировано {}".format(self.id, messages))
         return messages
 
@@ -109,7 +141,8 @@ class ForecastTask(Task):
 
         # проверим нужно ли прогнозирование второстепенных параметров
         if self.second_param is not None:
-            logging.info("id={}, Для задачи {} нужно прогнозирование второстепенных параметров".format(self.id, self.id))
+            logging.info("id={}, Для задачи {} нужно прогнозирование второстепенных "
+                         "параметров".format(self.id, self.id))
             count_secondary_param = self.second_param.shape[1]
             for i in range(0, count_secondary_param):
                 second_param = self.second_param[:, i]
@@ -141,30 +174,47 @@ class ForecastTask(Task):
         if self.second_param.shape == (0,):
             logging.info("id={}, Второстепенных параметров в задаче нет".format(self.id))
             return
+        if self.step == "learning":
+            forecasted_second_param = np.zeros((self.second_param.shape[0]+self.forecast_years,
+                                                self.second_param.shape[1]))
 
-        forecasted_second_param = np.zeros((self.second_param.shape[0]+self.forecast_years, self.second_param.shape[1]))
-        forecast_tasks = list(filter(lambda x: x.__class__.__name__ == "ForecastTask", self.child_tasks))
-        logging.info("id={}, Количество задач прогнозирования {}".format(self.id, len(forecast_tasks)))
-        for task in forecast_tasks:
-            task_name = task.main_param_name
-            logging.info("id={}, Сбор данных с задачи {}, параметр {}".format(self.id, task.id, task_name))
-            num = self.second_param_names.index(task_name)
-            forecasted_second_param[:, num] = task.main_param
-        self.second_param = forecasted_second_param
+            forecast_tasks = list(filter(lambda x: x.__class__.__name__ == "ForecastTask", self.child_tasks))
+            logging.info("id={}, Количество задач прогнозирования {}".format(self.id, len(forecast_tasks)))
+            for task in forecast_tasks:
+                task_name = task.main_param_name
+                logging.info("id={}, Сбор данных с задачи {}, параметр {}".format(self.id, task.id, task_name))
+                num = self.second_param_names.index(task_name)
+                forecasted_second_param[:, num] = task.result
 
-    def receive_result(self, result):
-        logging.info("id={}, Получен результат прогнозирования".format(self.id))
-        self.result = result
-        self.main_param = result
-        self.state = State.finished
+            self.second_param = forecasted_second_param
+
+    # def receive_result(self, result):
+    #
+    #     if self.step == "learning":
+    #         logging.info("id={}, Получен результат обучения".format(self.id))
+    #         self.theta = result
+    #         self.step = "sampling"
+    #         self.state = State.sampling
+    #     else:
+    #         logging.info("id={}, Получен результат прогнозирования".format(self.id))
+    #         self.main_param = result
+    #         if self.passed_count_of_trajectories < self.count_of_trajectories:
+    #             if self.result:
+    #                 self.result += np.array(result)
+    #                 self.result = self.result / 2
+    #             else:
+    #                 self.result = np.array(result)
+    #             if self.passed_count_of_trajectories >= self.count_of_trajectories:
+    #                 self.state = State.finished
+    #                 self.main_param = self.result
 
     def make_message(self):
-        logging.info("id={}, Запущена генерация сообщения задачи прогнозирования {}".format(self.id, self.id))
+        logging.info(f"id={self.id}, Запущена генерация сообщения задачи прогнозирования {self.id}, "
+                     f"state={self.state}, "
+                     f"step={self.step}")
         messages = []
-
         if self.state == State.running or self.state == State.finished or self.result is not None:
             return messages
-
         # проверим есть ли не оконченные задачи
         if self.all_children_is_finished():
             logging.info("id={}, Все дочерние процессы выполнены".format(self.id))
@@ -175,10 +225,11 @@ class ForecastTask(Task):
 
         # проверим сообщения от детей
         for task in self.child_tasks:
+            logging.info("id={}, Собираем сообщения с дочернего процесса {}".format(self.id, task.id))
             child_message = task.make_message()
             messages.extend(child_message)
         messages_new = []
         for m in messages:
-            m["forecast_years"] = self.forecast_years
+            # m["forecast_years"] = self.forecast_years
             messages_new.append(m)
         return messages_new
