@@ -34,7 +34,7 @@ class RandomizeParent(ABC):
 
         self.operating_data = np.array([])
         self.data_analysis()  # анализ данных
-        self.memory_param_calc()  # вычисление порядка
+        # self.memory_param_calc()  # вычисление порядка
         self.operation_data_preparation()  # подготовка данных с учетом порядка памяти
         self.param_limits_calc()
 
@@ -55,6 +55,7 @@ class RandomizeParent(ABC):
             return
         logging.info("ID={}. Анализ входных данных.".format(self.id),
                      extra={"task_id": self.id})
+
         if len(self.data.shape) != 2:
             logging.error(
                 "ID={}. Проверка размерности не прошла.".format(self.id),
@@ -100,13 +101,15 @@ class RandomizeParent(ABC):
                 c_k += (arg[j] - s_mean) * (arg[j + i] - s_mean)
             c_k = c_k / len_s
             if abs(c_k / c_0) < 0.1:
-                k = i
+                k = i + 1 if k == 0 else k
                 break
         self.memory_param = k
         logging.info("ID={}. Порядок вычислен и равен {}".format(self.id, self.memory_param))
 
     def operation_data_preparation(self):
         """Подготовка данных с учетом параметра памяти"""
+
+        # 1. формируем
         arr = self.target_array
 
         data = self.operating_data.copy() if self.operating_data is not None else None
@@ -122,13 +125,16 @@ class RandomizeParent(ABC):
                     (self.operating_data, arr[i:n + i - self.memory_param].reshape(-1, 1)))
 
         # добавляем дополнительные параметры
-        if data is None:
-            for i in range(0, data.shape[1]):
-                try:
-                    # при добавлении пропускаем self.data[i, 0] так как он является пропуском в данных
-                    self.operating_data = np.hstack((self.operating_data, data[self.memory_param:, i].reshape(-1, 1)))
-                except ValueError:
-                    self.operating_data = data[self.memory_param:, i].reshape(-1, 1)
+        # if type(data) is np.ndarray:
+        #     if len(data.shape) == 2:
+        #         for i in range(0, data.shape[1]):
+        #             try:
+        #                 # при добавлении пропускаем self.data[i, 0] так как он является пропуском в данных
+        #                 self.operating_data = \
+        #                     np.hstack((self.operating_data,
+        #                                data[self.memory_param-len(self.target_array):, i].reshape(-1, 1)))
+        #             except ValueError:
+        #                 self.operating_data = data[self.memory_param-len(self.target_array):, i].reshape(-1, 1)
 
         # добавляем свободное слагаемое в случае если это прогнозирование
         if self.__class__.__name__ == "RandomizeForecast":
@@ -146,11 +152,14 @@ class RandomizeParent(ABC):
         """
         logging.info("ID={}. Нормировка данных".format(self.id),
                      extra={"task_id": self.id})
-        min_data = np.min(self.operating_data, axis=0)
-        max_data = np.max(self.operating_data, axis=0)
-        self.operating_data = (self.operating_data - min_data) / (max_data - min_data)
-        self.min_max["min"] = min_data
-        self.min_max["max"] = max_data
+        logging.info("ID={}. Нормировка дополнительных данных".format(self.id),
+                     extra={"task_id": self.id})
+        if len(self.operating_data.shape) != 0:
+            min_data = np.min(self.operating_data, axis=0)
+            max_data = np.max(self.operating_data, axis=0)
+            self.operating_data = (self.operating_data - min_data) / (max_data - min_data)
+            self.min_max["min"] = min_data
+            self.min_max["max"] = max_data
         self.min_max["min_target"] = self.target_array.min()
         self.min_max["max_target"] = self.target_array.max()
         min_data = self.target_array.min()
@@ -184,17 +193,17 @@ class RandomizeParent(ABC):
             par_mx[i] = self.param_func(theta, i)
         return par_mx
 
-    def param_error(self, theta_m):
+    def param_error(self, theta):
         """
         Вычисление параметра измерительной ошибки
-        :param theta_m: множитель Лагранжа на шаге m
+        :param theta: множитель Лагранжа на шаге m
         :return: Параметр ошибки для вычисления целевой функции для оптимизации
         """
-
-        return (np.exp(-self.error_limits[0] * theta_m) * (self.error_limits[0] * theta_m + 1) -
-                np.exp(-self.error_limits[1] * theta_m) * (self.error_limits[1] * theta_m + 1)) / \
-            (theta_m * (np.exp(-self.error_limits[0] * theta_m) -
-                        np.exp(-self.error_limits[1] * theta_m)))
+        theta_ = theta.sum() / (len(theta) - self.memory_param)
+        return (np.exp(-self.error_limits[0] * theta_) * (self.error_limits[0] * theta_ + 1) -
+                np.exp(-self.error_limits[1] * theta_) * (self.error_limits[1] * theta_ + 1)) / \
+            (theta_ * (np.exp(-self.error_limits[0] * theta_) -
+                       np.exp(-self.error_limits[1] * theta_)))
 
     def func(self, theta):
         """
@@ -204,8 +213,9 @@ class RandomizeParent(ABC):
         """
         f = np.ones_like(theta)
         param_vector = self.param_vector(theta)
+        param_error = self.param_error(theta)
         for i in range(0, len(theta)):
-            f[i] = np.abs((param_vector * self.operating_data[i, :]).sum() + self.param_error(theta[i]) -
+            f[i] = np.abs((param_vector * self.operating_data[i, :]).sum() + param_error -
                           self.target_array[i])
         return f
 
@@ -229,7 +239,6 @@ class RandomizeParent(ABC):
                 "ID={}. Множители Лагранжа = {}".format(self.id, self.theta))
             return True
         else:
-
             logging.error(
                 "ID={}. "
                 "Вычисление множителей Лагранжа окончено неудачей".format(self.id))
@@ -290,17 +299,79 @@ class RandomizeParent(ABC):
 
 
 class RandomizeForecast(RandomizeParent):
-    def __init__(self, task_id, main_param: np.ndarray, secondary_param: np.ndarray):
+    def __init__(self, task_id, main_param: np.ndarray, secondary_param: np.ndarray, forecast_years: int):
 
+        self.forecast_years = forecast_years
         super().__init__(task_id, main_param, secondary_param)
         logging.info("Создание объекта рандомизированного прогнозирования")
-        self.time_parameter_values = {"short": int(config["RANDOMIZE_CONFIG"]["randomize.short_time_period"]),
-                                      "middle": int(config["RANDOMIZE_CONFIG"]["randomize.middle_time_period"]),
-                                      "long": int(config["RANDOMIZE_CONFIG"]["randomize.long_time_period"])}
 
     def data_analysis(self):
         self.operating_data = self.data
         return super().data_analysis()
+
+    def theta_calc(self):
+        """
+        Метод вычисления множителей Лагранжа через оптимизацию целевой функции
+        :return: множителей Лагранжа
+        """
+        tmp_ = self.operating_data.copy()
+        self.operating_data = self.operating_data[:-self.forecast_years, :]
+        status = super().theta_calc()
+        self.operating_data = tmp_
+        return status
+
+    def param_limits_calc(self):
+        """
+        Вычисление пределов множителей параметров
+        :return:
+        """
+        logging.info("ID={}. "
+                     "Вычисление промежутков параметров".format(self.id))
+        # вычисляются оценки МНК
+        y = self.operating_data[1:-self.forecast_years+1, 1] # целевое значение
+        y = y.reshape(-1, 1)  # превращаем строку в столбец
+        x = self.operating_data[:-self.forecast_years, :]
+        m = x.shape[1]
+        a_ls = np.linalg.inv(x.T.dot(x)).dot(x.T).dot(y)
+        e_ls = y - x.dot(a_ls)
+        s2 = np.power(e_ls, 2).sum() / (len(y) - m)
+        q = np.linalg.inv(x.T.dot(x))
+        for i in range(0, a_ls.shape[0]):
+            self.param_limits.append([a_ls[i, 0] - 3 * np.sqrt(s2 * q[i, i]), a_ls[i, 0] + 3 * np.sqrt(s2 * q[i, i])])
+
+        self.error_limits = [- 3 * np.sqrt(s2), 3 * np.sqrt(s2)]
+
+    def operation_data_preparation(self):
+        # todo ПРОВЕРКА данных
+        self.data_analysis()
+        # нормировка
+        self.normalization_data()
+        # вычисление порядка
+        self.memory_param_calc()
+        # какая размерность конечной матрицы? N-memory_param+forecast_years
+
+        n = len(self.target_array) - self.memory_param + self.forecast_years - 2
+        # формирование матрицы главного парамера (первый - единичный,
+        forecast_matrix = np.ones((n, 1))
+        # после - главный параметр с учетом памяти
+        arr = self.target_array
+        memory_param_matrix = np.zeros((n, self.memory_param))
+        for i in range(0, self.memory_param):  # пропускаем текущее значение
+            print(i)
+            print(self.memory_param - i)
+            q = arr[self.memory_param - i: -1]
+            q = q if len(q) < n else q[:n]
+            print(q)
+            memory_param_matrix[:, i] = np.hstack((q,
+                                                   np.zeros((n - len(q),))))
+        print(memory_param_matrix)
+        forecast_matrix = np.hstack((forecast_matrix, memory_param_matrix))
+        # прогнозные значения - формируем из исторических данных и заполняем нулями
+        if self.operating_data is None:
+            self.operating_data = forecast_matrix
+        else:
+            self.operating_data = np.hstack((forecast_matrix, self.operating_data[self.memory_param+1:-1, :]))
+        # добавление матрицы второстепенных параметров
 
     def modeling(self, n=1000, forecast_years=5):
         logging.info("ID={}. "
@@ -356,78 +427,97 @@ class RandomizeForecast(RandomizeParent):
     def modeling_mult(self, n=1000, forecast_years=5):
         logging.info("ID={}. "
                      "Начато моделирование - количество итераций - {}".format(self.id, n))
-        forecast_matrix = np.zeros((forecast_years, self.memory_param))
-        forecast_matrix = np.hstack((np.ones((forecast_years, 1)), forecast_matrix))
-
-        # прогнозирование вспомогательных параметров
-        logging.info("ID={}. "
-                     "Прогнозирование вспомогательных параметров".format(self.id))
-
-        logging.info("ID={}. "
-                     "Прогнозирование вспомогательных параметров окончено".format(self.id))
-        # forecast_matrix - матрица, у которой слева - нули, справа - предсказанные дополнительные параметры (в
-        # случае температуры и осадков - только нулевая матрица)
-
-        # вычисляем параметры функции ПРВ
-        hr_vector = ro_vector = np.ones(self.operating_data.shape[1])
-        for p in range(0, self.operating_data.shape[1]):
-            hr_vector[p] = np.sum(np.multiply(self.theta, self.operating_data[:, p]))
+        # forecast_matrix = np.zeros((forecast_years, self.memory_param))
+        # forecast_matrix = np.hstack((np.ones((forecast_years, 1)), forecast_matrix))
+        #
+        # # прогнозирование вспомогательных параметров
+        # logging.info("ID={}. "
+        #              "Прогнозирование вспомогательных параметров".format(self.id))
+        #
+        # logging.info("ID={}. "
+        #              "Прогнозирование вспомогательных параметров окончено".format(self.id))
+        # # forecast_matrix - матрица, у которой слева - нули, справа - предсказанные дополнительные параметры (в
+        # # случае температуры и осадков - только нулевая матрица)
+        #
+        # # вычисляем параметры функции ПРВ
+        print(self.operating_data)
+        print(self.target_array)
+        # print(self.theta)
+        # print("self.param_limits")
+        # print(self.param_limits)
+        tt = self.operating_data[:-self.forecast_years, :]
+        hr_vector = ro_vector = np.ones(tt.shape[1])
+        for p in range(0, tt.shape[1]):
+            hr_vector[p] = np.sum(np.multiply(self.theta, tt[:, p]))
             ro_vector[p] = (np.exp(-self.param_limits[p][0] * hr_vector[p]) -
                             np.exp(-self.param_limits[p][1] * hr_vector[p])) / hr_vector[p]
 
-        # объединяем матрицы forecast_matrix и operating_data
-        forecast_matrix = np.vstack((self.operating_data, forecast_matrix))
-        logging.info("ID={}. Начато моделирование".format(self.id))
-
         # заполняем work_matrix известными значениями
-        work_matrix = forecast_matrix
-        forecasted_target_param = np.zeros((forecast_years + len(self.target_array)))
-        forecasted_target_param[:len(self.target_array)] = self.target_array
-        res = [forecasted_target_param, forecast_matrix, work_matrix, hr_vector, ro_vector]
+        forecast_matrix = self.operating_data.copy()
+        print(forecast_matrix)
+        # work_matrix = forecast_matrix
+        forecasted_target_param = np.zeros((forecast_years,))
+        # forecasted_target_param[:len(self.target_array)] = self.target_array
+        # print(self.target_array)
+        res = [forecasted_target_param.copy(), forecast_matrix.copy(), hr_vector, ro_vector]
         process_count = os.cpu_count()
+        # process_count = 1
+        # print(process_count)
         arg = []
         for i in range(0, n, process_count):
-
             for j in range(0, process_count):
                 r = res.copy()
-                r.append(np.random.default_rng(np.random.randint(10, n*100)))
+                r.append(np.random.default_rng(np.random.randint(10, n * 1000)))
                 arg.append(r)
         ans_param = np.zeros_like(forecasted_target_param)
         with Pool(process_count) as p:
-            pool_param = sum(p.map(self.m_func, arg, chunksize=2)) / n
-        ans_param += pool_param
+            pool_param = sum(p.map(self.m_func, arg, chunksize=process_count)) / n
+            ans_param += pool_param
+        print("========================ans_param========================")
+        print(ans_param)
         # for step in range(0, n):
         #     logging.debug("ID={}. Моделирование - шаг {}".format(self.id, step))
         #     # заполним forecasted_target_param известными значениями
         #     f = self.m_func(forecasted_target_param=forecasted_target_param, forecast_matrix=forecast_matrix,
         #                     work_matrix=work_matrix, step=step, hr_vector=hr_vector, ro_vector=ro_vector)
-        #     print(f)
         #     ans_param += f
 
         ans = ans_param
-        ans = ans[-forecast_years:]
-        ans = ans * (self.min_max["max_target"] - self.min_max["min_target"]) + self.min_max["min_target"]
+        # ans = ans[-forecast_years:]
+        for i in range(0, len(ans)):
+            ans[i] = ans[i] * (self.min_max["max_target"] - self.min_max["min_target"]) + self.min_max["min_target"]
         ans = np.hstack((self.target_array_bk, ans))
         return ans
 
     def m_func(self, res):
         forecasted_target_param = res[0]
         forecast_matrix = res[1]
-        work_matrix = res[2]
-        hr_vector = res[3]
-        ro_vector = res[4]
-
+        hr_vector = res[2]
+        ro_vector = res[3]
         # заполним forecasted_target_param известными значениями
-        for year in range(self.operating_data.shape[0], forecast_matrix.shape[0]):
+
+        for year in range(0, self.forecast_years):
 
             # формируем строку с данными памяти
-            for j in range(1, self.memory_param + 1):
-                work_matrix[year, j] = forecasted_target_param[year - j]
-
+            # for j in range(1, year+1):
+            #     forecast_matrix[-(self.forecast_years - year + 1), j] = forecasted_target_param[year - j]
+            #     print("forecasted_target_param[year - j]", forecasted_target_param[year - j])
+            # print(year, "year")
+            # print("forecast_matrix[-(self.forecast_years - year + 1), :]")
+            # print(forecast_matrix[-(self.forecast_years - year + 1), :])
+            # print(self.generate_random_value_with_prv(hr_vector, ro_vector, res[4]))
             # предсказываем на шаге step значение целевого параметра
             forecasted_target_param[year] = \
-                np.sum((self.generate_random_value_with_prv(hr_vector, ro_vector, res[5]) * work_matrix[year, :])) + \
-                self.generate_random_error_prv(res[5])
+                np.sum((self.generate_random_value_with_prv(hr_vector, ro_vector, res[4]) *
+                        forecast_matrix[-(self.forecast_years - year + 1), :])) + \
+                self.generate_random_error_prv(res[4])
+            # проверим, последний ли это год
+            if year != self.forecast_years-1:
+                # запишем новое значение
+                forecast_matrix[-(self.forecast_years - year), 1] = forecasted_target_param[year]
+                # заполним строку памяти
+                forecast_matrix[-(self.forecast_years - year), 2:self.memory_param+1] = \
+                    forecast_matrix[-(self.forecast_years - year + 1), 1:self.memory_param]
         return forecasted_target_param
 
 

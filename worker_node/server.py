@@ -16,17 +16,11 @@ async def worker_server(worker_id):
                                        )
     await worker_consumer.start()
     worker = Worker(worker_id)
-    await worker.send_first_message()
+    # await worker.send_first_message()
     async for msg in worker_consumer:
         logging.info("Мой ИД {}".format(worker.id))
         logging.info("Получено новое сообщение, топик {}".format(msg.topic))
         message = json.loads(msg.value)
-        # if msg.key.decode('utf-8').replace('"', '') != worker.id:
-        #     logging.info("Задача пришла не этому воркеру "
-        #                  "(текущий id {}, id в сообщения {})".format(worker.id,
-        #                                                            msg.key.decode('utf-8').replace('"', '')))
-        #     continue
-        # else:
         logging.info("Задача назначена этому воркеру "
                      "(текущий id {}, id в сообщения {})".format(worker.id,
                                                                  msg.key.decode('utf-8').replace('"', '')))

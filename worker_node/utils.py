@@ -30,6 +30,9 @@ def generator(edges, prv, lh_r):
 
 
 def generator_param(edges, prv, rnd):
+    if prv(edges[0]) == prv(edges[1]) == 0:
+        print("edges", edges[0], edges[1])
+        return 1
     max_value_prv = max(prv(edges[0]), prv(edges[1]))
     while True:
         x1 = edges[0] + rnd.uniform(0, 1) * (edges[1] - edges[0])

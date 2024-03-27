@@ -36,6 +36,8 @@ services:
       - zookeeper
   controller:
     build: controller
+    volumes:
+      - ./controller/:/action/workspace/controller
     links:
       - kafka
     restart: always
@@ -43,6 +45,8 @@ services:
       - kafka
   worker_node:
     build: worker_node
+    volumes:
+      - ./worker_node/:/action/workspace/worker_node
     links:
       - kafka
     depends_on:

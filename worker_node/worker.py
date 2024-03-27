@@ -31,9 +31,10 @@ class Worker:
         self.type = message["type"]
         self.step = message["step"]
         self.ids_path = message["ids_path"]
+        self.forecast_years = message.pop("forecast_years", None)
         if self.step == "sampling":
             self.count_of_trajectories = message["count_of_trajectories"]
-            self.forecast_years = message["forecast_years"] if 'forecast_years' in message.keys() else None
+
             self.theta = np.array(message["theta"])
             print(self.theta)
         logging.info("Импорт данных из сообщения закончен")
@@ -44,11 +45,18 @@ class Worker:
     def calc(self):
         logging.info("Начало вычислений")
         self.state = 'busy'
-        rand_type = RandomizeForecast if self.type == "ForecastTask" else RandomizeRecover
-        rand_model = rand_type(self.ids_path[0], self.main_param, self.secondary_matrix)
+        if self.type == "ForecastTask":
+            rand_model = RandomizeForecast(self.ids_path[0], self.main_param, self.secondary_matrix,
+                                           forecast_years=self.forecast_years)
+        else:
+            rand_model = RandomizeRecover(self.ids_path[0], self.main_param, self.secondary_matrix)
+
         ans = {"parent_ids": self.ids_path, "step": self.step}
+        if self.step == "preparing":
+            rand_model.learning()
         if self.step == "learning":
             learning_status = rand_model.learning()
+            print("111111111111", learning_status)
             self.state = 'free'
             if learning_status:
                 ans["result"] = list(rand_model.theta)
@@ -58,7 +66,7 @@ class Worker:
                 ans["error"] = "Не удалось вычислить множители Лагранжа",
         else:
             rand_model.theta = self.theta
-            if rand_type == RandomizeForecast:
+            if self.type == "ForecastTask":
                 result = rand_model.modeling_mult(n=self.count_of_trajectories, forecast_years=self.forecast_years)
             else:
                 result = rand_model.modeling(n=self.count_of_trajectories)

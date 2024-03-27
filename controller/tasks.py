@@ -86,6 +86,7 @@ class Task:
             "main_param": list(self.main_param),
             "second_param": second_param,
             "step": self.step,
+            "forecast_years": self.forecast_years,
             "type": self.__class__.__name__
 
         }
@@ -101,9 +102,12 @@ class Task:
             n = int(self.count_of_trajectories / self.count_of_trajectories_for_one)
             messages = [task_message.copy() for i in range(0, n)]
 
-            if self.count_of_trajectories - self.count_of_trajectories_for_one * n != 0:
+            if n == 0:
+                task_message["count_of_trajectories"] = self.count_of_trajectories
+            elif self.count_of_trajectories - self.count_of_trajectories_for_one * n > 0:
                 task_message["count_of_trajectories"] = self.count_of_trajectories - self.count_of_trajectories_for_one
-                messages.append(task_message)
+            messages.append(task_message)
+
 
         self.state = State.running
         logging.info("id={}, Сообщение сгенерировано {}".format(self.id, messages))
